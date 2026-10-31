@@ -18,6 +18,7 @@ const isAdmin=()=>currentUser===ADMIN_NAME;
 const MSG_ADM='Apenas o MingauCoach pode editar. Você pode jogar e criar ligas personalizadas.';
 let editTeamId=null,editPlayerId=null,tactics={};
 let M=null,QQ=[],playing=false,PK=null;
+let ST_LIVE=false;   /* true durante partidas do StarsTeam: times/atletas temporários não podem ser salvos nem sincronizados */
 
 /* ---------- Armazenamento com carimbo (sincronização) e times privados ---------- */
 const MK=['stars_teams','stars_players','stars_leagues'];
@@ -34,6 +35,7 @@ function stampList(k,arr){
   if(dd)localStorage.setItem('stars_del',JSON.stringify(DEL));
 }
 const store=(k,v)=>{
+  if(ST_LIVE&&MK.includes(k))return true;
   try{
     let out=v;
     if(MK.includes(k)&&Array.isArray(v))stampList(k,v);

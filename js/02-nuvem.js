@@ -36,6 +36,7 @@ function mergeLogs(a,b){
   return out.slice(0,500);
 }
 function syncBusy(){
+  if(ST_LIVE)return true;
   if(M&&['running','hold','paused','event','pen','injury','break'].includes(M.status))return true;
   if(M&&M.ctx)return true;
   return !!document.querySelector('.modal.on:not(#m-cloud):not(#m-ads):not(#m-coach)');

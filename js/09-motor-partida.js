@@ -12,10 +12,14 @@ const bestOf=(l,ps)=>l.on.filter(p=>ps.includes(p.pos)).sort((a,b)=>b.ovr-a.ovr)
 const pick=(l,W)=>{const f=l.on.filter(p=>p.pos!=='GK');if(!f.length)return null;const w=f.map(p=>(W[p.pos]??1)*Math.pow(p.ovr/70,2));let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<f.length;i++){r-=w[i];if(r<=0)return f[i]}return f[0]};
 const wpick=(arr,wf)=>{const w=arr.map(wf);let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<arr.length;i++){r-=w[i];if(r<=0)return arr[i]}return arr[0]};
 const sectorOf=p=>Object.values(G).find(a=>a.includes(p.pos))||[];
+/* Atletas com atributos (cartas do StarsTeam: p.sk = [RIT,FIN,PAS,DRI,DEF,FIS]) rendem conforme o setor onde jogam.
+   Atletas comuns (sem p.sk) continuam valendo só o OVR. */
+const SECT_MIX={fwd:[.25,.35,.1,.2,0,.1],mid:[.15,.05,.35,.25,.15,.05],def:[.1,0,.15,0,.5,.25]};
+const rateIn=(p,sec)=>{if(!p.sk)return p.ovr;const w=SECT_MIX[sec];let s=0;for(let i=0;i<6;i++)s+=(p.sk[i]||0)*w[i];return p.ovr*.5+s*.5};
 function pw(l,t){
-  const avg=ps=>{const x=l.on.filter(p=>ps.includes(p.pos));return x.length?x.reduce((s,p)=>s+p.ovr,0)/x.length:68};
+  const avg=(ps,sec)=>{const x=l.on.filter(p=>ps.includes(p.pos));return x.length?x.reduce((s,p)=>s+rateIn(p,sec),0)/x.length:68};
   const cap=l.on.some(p=>p.id===t.captain)?1.5:0,gk=gkOf(l);
-  return{fwd:avg(G.fwd)+cap,mid:avg(G.mid)+cap,def:avg(G.def)+cap,gk:(gk?gk.ovr:66)+cap};
+  return{fwd:avg(G.fwd,'fwd')+cap,mid:avg(G.mid,'mid')+cap,def:avg(G.def,'def')+cap,gk:(gk?gk.ovr:66)+cap};
 }
 function lineup(team){
   const inLeague=!!(S&&S.teamIds&&S.teamIds.includes(team.id));
