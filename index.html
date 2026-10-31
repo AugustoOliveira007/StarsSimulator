@@ -6,6 +6,7 @@
 <title>Stars Simulator - Futebol & Tática</title>
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;700&family=Rajdhani:wght@600;700&family=Inter:wght@400;600;800&family=Russo+One&family=Mrs+Saint+Delafield&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/starsteam.css">
 </head>
 <body>
 
@@ -33,6 +34,8 @@
 <button class="nav-btn" data-tab="teams">Times</button>
 <button class="nav-btn" data-tab="players">Atletas</button>
 <button class="nav-btn" data-tab="totw">Seleção da Semana</button>
+<button class="nav-btn nav-st" data-tab="st">⭐ StarsTeam</button>
+<button class="nav-btn" id="nav-stadm" data-tab="stadm" style="display:none">StarsTeam Admin</button>
 <button class="nav-btn" id="nav-logs" data-tab="logs" style="display:none">Logs</button>
 </nav>
 <div class="row" style="gap:.5rem">
@@ -190,6 +193,8 @@
 </section>
 
 <section id="tab-logs" class="tab"><h2 class="t" style="margin-bottom:1rem">Logs de auditoria</h2><div class="panel"><div class="ticker-list" id="logs" style="max-height:none"></div></div></section>
+<section id="tab-st" class="tab st-scope"><div id="st-root"></div></section>
+<section id="tab-stadm" class="tab st-scope"><h2 class="t" style="margin-bottom:1rem">StarsTeam — aprovação do beta</h2><div id="stadm-body"></div></section>
 </main>
 
 <div class="modal" id="m-pk"><div class="mcard pkcard">
@@ -274,6 +279,15 @@
 <script src="js/12-substituicoes.js"></script>
 <script src="js/13-ligas.js"></script>
 <script src="js/14-abertura.js"></script>
+<script src="js/16-st-data.js"></script>
+<script src="js/17-st-core.js"></script>
+<script src="js/18-st-ui.js"></script>
+<script src="js/19-st-elenco.js"></script>
+<script src="js/20-st-loja.js"></script>
+<script src="js/21-st-mercado.js"></script>
+<script src="js/22-st-jogar.js"></script>
+<script src="js/23-st-admin.js"></script>
+<script src="js/24-st-boot.js"></script>
 <script src="js/15-inicializacao.js"></script>
 </body>
 </html>
