@@ -62,6 +62,7 @@ const ST_NATIONS={
 const ST_NAT_CODES=Object.keys(ST_NATIONS);
 function stFlag(code,w){
   w=w||24;const h=Math.round(w*2/3);
+  if(ST_NATIONS[code]&&ST_NATIONS[code].img)return `<img class="stflag" src="${String(ST_NATIONS[code].img).replace(/"/g,'&quot;')}" width="${w}" height="${h}" style="object-fit:cover;border-radius:2px" alt="">`;
   const R=(x,y,ww,hh,c)=>`<rect x="${x}" y="${y}" width="${ww}" height="${hh}" fill="${c}"/>`;
   const V=(cs,rs)=>{let x=0,t=rs?rs.reduce((a,b)=>a+b,0):cs.length;return cs.map((c,i)=>{const ww=30*((rs?rs[i]:1)/t);const r=R(x,0,ww+.2,20,c);x+=ww;return r}).join('')};
   const H=(cs,rs)=>{let y=0,t=rs?rs.reduce((a,b)=>a+b,0):cs.length;return cs.map((c,i)=>{const hh=20*((rs?rs[i]:1)/t);const r=R(0,y,30,hh+.2,c);y+=hh;return r}).join('')};
@@ -226,7 +227,8 @@ const ST_DB={players:[],byId:{},clubs:[],leagues:[],clubByName:{}};
     ST_DB.players.push(p);ST_DB.byId[p.id]=p;
   }
 })();
-const ST_LEAGUE_NAME=id=>(ST_DB.leagues.find(l=>l.id===id)||{n:ST_SPECIAL_LEAGUES[id]||id}).n;
+const ST_EXTRA_LG={};
+const ST_LEAGUE_NAME=id=>(ST_DB.leagues.find(l=>l.id===id)||{n:ST_SPECIAL_LEAGUES[id]||ST_EXTRA_LG[id]||id}).n;
 
 /* ---------- Semana (segunda a domingo, horário local) e dia ---------- */
 function stWeekStart(d){d=new Date(d||Date.now());d.setHours(0,0,0,0);const wd=(d.getDay()+6)%7;d.setDate(d.getDate()-wd);return d}
@@ -239,7 +241,7 @@ function stIsWeekend(d){const wd=new Date(d||Date.now()).getDay();return wd===6|
 const ST_TOTW_CACHE={};
 function stTotwOfWeek(wid){
   if(ST_TOTW_CACHE[wid])return ST_TOTW_CACHE[wid];
-  const rng=stRng('totw:'+wid),pool=ST_DB.players.filter(p=>p.src==='g'&&p.ovr>=70);
+  const rng=stRng('totw:'+wid),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&p.ovr>=70&&p.ovr<=90);
   const out=[],seen=new Set();
   while(out.length<12&&seen.size<pool.length){
     const p=rng.pick(pool);if(seen.has(p.id))continue;seen.add(p.id);
@@ -256,7 +258,7 @@ function stBaseValue(ovr){
   for(let i=1;i<P.length;i++)if(ovr<=P[i][0]){const [a,va]=P[i-1],[b,vb]=P[i],t=(ovr-a)/(b-a);return Math.exp(Math.log(va)+(Math.log(vb)-Math.log(va))*t)}
   return P[P.length-1][1];
 }
-const ST_RAR_MUL={comum:1,raro:1.35,totw:2.3,heroi:2.8,idolo:5};
+const ST_RAR_MUL={comum:1,raro:1.35,totw:2.3,heroi:2.8,idolo:5,especial:3.5};
 function stRound(v){return v<1000?Math.max(50,Math.round(v/50)*50):v<10000?Math.round(v/100)*100:v<100000?Math.round(v/250)*250:Math.round(v/1000)*1000}
 const stValue=c=>stRound(stBaseValue(c.ovr)*(ST_RAR_MUL[c.rar]||1));
 const stRange=c=>{const v=stValue(c);return{min:stRound(v*.55),max:stRound(v*2.2)}};
@@ -295,7 +297,8 @@ const ST_STADIUMS=[
   {id:'s6',name:'Orion Arena',cap:75000,hue:35},{id:'s7',name:'Cometa Stadium',cap:82000,hue:350}
 ];
 function stStadiumImg(s){
-  const h=s.hue;
+  if(s&&s.pid&&String(s.pid).startsWith('rt:')&&typeof teamOf==='function'){const t=teamOf(String(s.pid).slice(3));if(t&&t.stadiumImg)return t.stadiumImg}
+  const h=(s&&s.hue)||(s&&s.name?stHash(s.name)%360:210);
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${h} 50% 14%)"/><stop offset="1" stop-color="hsl(${h} 40% 30%)"/></linearGradient></defs><rect width="400" height="160" fill="url(#g)"/>${Array.from({length:14},(_,i)=>`<rect x="${i*30}" y="${30+(i%3)*6}" width="22" height="${60-(i%3)*6}" fill="hsl(${h} 30% ${22+(i%4)*4}%)" opacity=".85"/>`).join('')}<g fill="#fff" opacity=".9">${Array.from({length:60},(_,i)=>`<circle cx="${(i*53)%400}" cy="${24+((i*37)%70)}" r="1.3"/>`).join('')}</g><rect y="108" width="400" height="52" fill="hsl(130 45% 26%)"/></svg>`;
   return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
 }

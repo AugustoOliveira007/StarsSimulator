@@ -34,15 +34,17 @@ document.addEventListener('change',e=>{const el=e.target.closest('[data-ch]');if
 
 /* ---------- Cartas ---------- */
 function stFrameFor(c){
+  const dd=c&&c.src==='c'&&ST.cat&&ST.cat.custom[c.pid];if(dd&&dd.frame)return dd.frame;
   const F=ST_ART.cardFrames,k=c.rar==='totw'?'totw':c.rar==='heroi'?'heroi':c.rar==='idolo'?'idolo':c.rar==='raro'?'raro':stTier(c.ovr);
   return F[k]||'';
 }
 function stCardCrest(c){
   if(c.rar==='idolo')return '<span class="stc-star">★</span>';
   if(c.src==='r'&&c.clubId&&String(c.clubId).startsWith('rt:')){const t=teamOf(String(c.clubId).slice(3));if(t&&t.logo)return `<img src="${esc(t.logo)}" alt="" onerror="this.style.display='none'">`}
+  if(c.src==='c'){const d=ST.cat&&ST.cat.custom[c.pid];if(d&&d.crestImg)return `<img src="${stAttr(d.crestImg)}" alt="">`}
   const cl=stClubById[c.clubId];return cl?stCrest(cl.crest,40):'';
 }
-const ST_RAR_TAG={totw:'TOTW',heroi:'HERÓI',idolo:'ÍDOLO'};
+const ST_RAR_TAG={totw:'TOTW',heroi:'HERÓI',idolo:'ÍDOLO',especial:'ESPECIAL'};
 function stCardHTML(c,o){
   o=o||{};
   const size=o.size?' '+o.size:'',attrs=(o.id?` data-act="${o.act||'card'}" data-id="${stAttr(o.id===true?c&&c.id:o.id)}"`:'')+(o.extra||'');
@@ -65,19 +67,19 @@ function stCardHTML(c,o){
 }
 function stStaffHTML(c,o){
   const size=o.size?' '+o.size:'',attrs=(o.id?` data-act="${o.act||'card'}" data-id="${stAttr(c.id)}"`:'')+(o.extra||'');
-  return `<div class="stc th-${c.rar==='raro'?'raro-prata':'prata'} staff${size}${o.tilt===false?'':' tilt'}${o.sel?' sel':''}${o.cls?' '+o.cls:''}"${attrs}><div class="stc-in">
-    <div class="stc-top"><div class="stc-ovr">TEC</div><div class="stc-pos">${c.rar==='raro'?'RARO':''}</div><div class="stc-fl">${c.nat?stFlag(c.nat,26):''}</div><div class="stc-cr"></div></div>
-    <img class="stc-ph" src="${stAttr(stAvatarURL(c.face,c.hue))}" alt=""><div class="stc-nm">${esc(c.name)}</div>
-    <div class="stc-sub">${esc(c.leagueN||'')}</div><div class="stc-alt">+1 liga · +1 nação</div></div><div class="stc-shine"></div></div>`;
+  const d=stCatDef(c),sp=c.rar==='especial'||(d&&d.special),th=sp?'th-tecesp-'+((d&&d.theme)||'ouro'):'th-tec',fr=d&&d.frame;
+  const img=d&&d.img?d.img:stAvatarURL(c.face,c.hue),lg=c.league&&c.league.startsWith('x:')?c.leagueN:(c.leagueN||ST_LEAGUE_NAME(c.league));
+  return `<div class="stc ${th} staff${size}${o.tilt===false?'':' tilt'}${o.sel?' sel':''}${o.cls?' '+o.cls:''}"${attrs}${fr?` style="--frame:url('${stAttr(fr)}')"`:''}><div class="stc-in">
+    <div class="stc-top"><div class="stc-ovr tec">TEC</div><div class="stc-fl">${c.nat?stFlag(c.nat,26):''}</div></div>
+    <img class="stc-ph" src="${stAttr(img)}" alt=""><div class="stc-nm">${esc(c.name)}</div>
+    <div class="stc-sub">${esc(lg||'')}</div><div class="stc-alt">${sp?'★ TÉCNICO ESPECIAL':'+1 liga · +1 nação'}</div></div>${o.badge?`<div class="stc-badge">${o.badge}</div>`:''}<div class="stc-shine"></div></div>`;
 }
 function stStadiumHTML(c,o){
   const size=o.size?' '+o.size:'',attrs=(o.id?` data-act="${o.act||'card'}" data-id="${stAttr(c.id)}"`:'')+(o.extra||'');
-  return `<div class="stc th-ouro staff stad${size}${o.tilt===false?'':' tilt'}${o.sel?' sel':''}${o.cls?' '+o.cls:''}"${attrs}><div class="stc-in">
-    <div class="stc-top"><div class="stc-ovr">EST</div><div class="stc-pos"></div><div class="stc-fl"></div><div class="stc-cr"></div></div>
-    <img class="stc-ph wide" src="${stAttr(stStadiumImg(c))}" alt=""><div class="stc-nm">${esc(c.name)}</div>
-    <div class="stc-sub">🏟️ ${stFmt(c.cap)} lugares</div></div><div class="stc-shine"></div></div>`;
+  return `<div class="stc th-ouro staff stad${size}${o.tilt===false?'':' tilt'}${o.sel?' sel':''}${o.cls?' '+o.cls:''}"${attrs}>
+    <img class="stc-full" src="${stAttr(stStadiumImg(c))}" alt=""><div class="stc-stbar"><b>${esc(c.name)}</b><small>🏟️ ${stFmt(c.cap)} lugares${String(c.pid||'').startsWith('rt:')?' • estádio real':''}</small></div>${o.badge?`<div class="stc-badge">${o.badge}</div>`:''}<div class="stc-shine"></div></div>`;
 }
-const stRarLabel=c=>c.kind==='manager'?'Treinador':c.kind==='stadium'?'Estádio':({totw:'Time da Semana',heroi:'Herói',idolo:'Ídolo',raro:'Raro',comum:'Comum'})[c.rar]||'';
+const stRarLabel=c=>c.kind==='manager'?(c.special||(ST.cat&&ST.cat.mgrs[c.pid]&&ST.cat.mgrs[c.pid].special)?'Treinador especial':'Treinador'):c.kind==='stadium'?'Estádio':({especial:'Especial',totw:'Time da Semana',heroi:'Herói',idolo:'Ídolo',raro:'Raro',comum:'Comum'})[c.rar]||'';
 const stTierName=c=>({bronze:'Bronze',prata:'Prata',ouro:'Ouro'})[stCardTier(c)]||'';
 
 /* ---------- Modal (em cima de tudo) ---------- */
@@ -278,7 +280,7 @@ STA.crsave=async()=>{
   stAddPack('inicial','boas-vindas');stAddPack('bronze','boas-vindas');stAddPack('bronze','boas-vindas');stAddPack('prata','boas-vindas');
   stSave();
   stNote('🎉 Bem-vindo ao StarsTeam! Abra o Pacote Inicial na Loja para montar o seu primeiro elenco.');
-  stGo('hub',null);ST.startPoll&&ST.startPoll();
+  stGo('hub',null);ST.startPoll&&ST.startPoll();setTimeout(stAnnPopup,1500);
 };
 
 /* ---------- Entrada no modo ---------- */
@@ -303,6 +305,7 @@ async function stEnter(force){
     if(ST_LIVE&&M&&M.stx&&!M.stx.done)stGo('match',null,true);
     else if(ST.view==='load'||ST.view==='gate'||ST.view==='create'||!STV[ST.view])stGo('hub',null,true);
     else stGo(ST.view,ST.arg,true);
+    stCatEnforce();setTimeout(stAnnPopup,900);
     stStartPoll();
   }catch(err){console.error('[StarsTeam] entrar',err);stGo('gate',null,true);toast('Erro ao entrar no StarsTeam: '+(err&&err.message||err))}
   finally{ST.entering=false}
@@ -362,7 +365,8 @@ STV.hub=()=>{
   }).join('');
   const fresh=c.packs.length?`<div class="st-strip" data-act="go" data-v="store">🎁 Você tem <b>${c.packs.length}</b> pacote(s) para abrir!<span>Abrir agora ›</span></div>`:'';
   const notes=c.msgs.slice(0,4).map(m=>`<div class="st-feed"><span>${new Date(m.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>${esc(m.x)}</div>`).join('')||'<div class="st-feed">Nada novo por aqui.</div>';
-  return `${ST.cfg.notice?`<div class="st-notice">📢 ${esc(ST.cfg.notice)}</div>`:''}${fresh}
+  const ann=ST.ann.slice(0,2).map(stAnnHTML).join('');
+  return `${ST.cfg.notice?`<div class="st-notice">📢 ${esc(ST.cfg.notice)}</div>`:''}${ann?`<div class="st-card"><h3 class="t">📢 Novidades</h3>${ann}</div>`:''}${fresh}
   <div class="st-hub"><div class="st-hero"><div class="st-hero-cr tilt">${stCrest(c.crest,128)}</div>
     <div class="st-hero-i"><h2 class="t">${esc(c.name)}</h2><div class="st-hero-s"><span>${ST_DIV_NAME(c.rv.div)}</span><span>${c.st.p} J • ${c.st.w} V • ${c.st.d} E • ${c.st.l} D</span><span>Rating ${Math.round(c.rv.rating)}</span></div>
     <div class="row" style="margin-top:.7rem;gap:.5rem">${daily?`<button class="btn" data-act="daily">🎁 Resgatar pacote diário</button>`:`<button class="btn sec" disabled>Próximo pacote diário em ${Math.ceil(left/3600e3)}h</button>`}<button class="btn sec" data-act="go" data-v="squad">Editar elenco</button></div></div>

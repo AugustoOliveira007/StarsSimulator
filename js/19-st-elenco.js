@@ -7,7 +7,7 @@ function stPitchHTML(sq,cards,mgr,o){
   const F=FORMS[sq.formation]||FORMS['4-3-3'],eff=stEffective(cards,sq.formation,mgr),bg=ST_ART.pitchBg?`style="--pitch-img:url('${stAttr(ST_ART.pitchBg)}')"`:'';
   const slots=F.map(([lb,x,y],i)=>{
     const c=cards[i],e=eff[i];
-    return `<div class="st-slot${o.pick&&o.pick.t==='xi'&&o.pick.i===i?' pick':''}" style="left:${x}%;top:${y}%" data-act="slot" data-t="xi" data-i="${i}">
+    return `<div class="st-slot${o.pick&&o.pick.t==='xi'&&o.pick.i===i?' pick':''}" style="left:${x}%;top:${y}%" data-act="slot" data-t="xi" data-i="${i}"${c&&!o.static?` data-drag="${c.id}"`:''}>
       ${c?stCardHTML(c,{size:'xs',eff:e.eff,chem:e.chem,tilt:false,badge:sq.captain===c.id?'©':sq.pk===c.id?'P':''}):`<div class="stc xs empty"><span>${lb}</span></div>`}
       ${c&&e.pen?`<em class="st-pen">${lb}</em>`:''}</div>`;
   }).join('');
@@ -23,7 +23,7 @@ function stChemSummary(sq,cards,mgr){
 STV.squad=()=>{
   const c=ST.club,sq=stSq(),cards=sq.slots.map(id=>c.cards[id]),mgr=c.cards[c.mgr],a=stActiveInfo(),sm=stChemSummary(sq,cards,mgr);
   const full=cards.every(Boolean);
-  const bench=sq.bench.map((id,i)=>`<div class="st-slot b" data-act="slot" data-t="bn" data-i="${i}">${c.cards[id]?stCardHTML(c.cards[id],{size:'xs',tilt:false}):`<div class="stc xs empty"><span>R${i+1}</span></div>`}</div>`).join('');
+  const bench=sq.bench.map((id,i)=>`<div class="st-slot b" data-act="slot" data-t="bn" data-i="${i}"${c.cards[id]?` data-drag="${id}"`:''}>${c.cards[id]?stCardHTML(c.cards[id],{size:'xs',tilt:false}):`<div class="stc xs empty"><span>R${i+1}</span></div>`}</div>`).join('');
   const xi=cards.filter(Boolean);
   return `<div class="st-sqtop"><h2 class="t">Elenco</h2>
     <div class="st-tabs">${c.squads.map((s,i)=>`<button class="${i===c.sq?'on':''}" data-act="sqtab" data-i="${i}">${esc(s.name)}</button>`).join('')}<button data-act="sqname" title="Renomear">✏️</button></div></div>
@@ -31,6 +31,9 @@ STV.squad=()=>{
     <div class="st-nums"><div><small>OVR</small><b>${full?a.ovr:'–'}</b></div><div><small>ENTROSAMENTO</small><b>${sm.ch.total}<i>/33</i></b></div><div><small>TITULARES</small><b>${xi.length}<i>/11</i></b></div></div>
     ${stPitchHTML(sq,cards,mgr)}
     <div class="st-bench"><h4 class="st-h4">Reservas</h4><div class="st-benchrow">${bench}</div></div>
+    <div class="st-card st-colpanel"><h4 class="st-h4">Suas cartas <small class="st-fine">— arraste para o campo ou para o banco. Solte aqui para tirar do elenco.</small></h4>
+      <div class="st-filters"><input class="fc" placeholder="Buscar…" value="${stAttr(ST.sqcol.q)}" data-in="sqcolq" style="max-width:180px"><select class="fc" data-ch="sqcolpos"><option value="">Todas posições</option>${['GK','DEF','MEI','ATA'].concat(Object.keys(ST_PROFILE)).map(p=>`<option ${ST.sqcol.pos===p?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="st-colgrid st-sqcol" id="st-sqcol">${stSqColHTML()}</div></div>
   </div><div class="st-sq-side">
     <div class="st-card"><h4 class="st-h4">Formação e tática</h4>
       <label class="st-lbl">Formação</label><select class="fc" data-ch="sqform">${Object.keys(FORMS).map(k=>`<option ${k===sq.formation?'selected':''}>${k}</option>`).join('')}</select>
@@ -48,6 +51,17 @@ STV.squad=()=>{
       <div class="st-chips">${sm.txt.map(t=>`<span>${t}</span>`).join('')||'<span>Nenhuma ligação ainda</span>'}</div></div>
   </div></div>`;
 };
+ST.sqcol={q:'',pos:''};
+function stSqColHTML(){
+  const c=ST.club,sq=stSq(),f=ST.sqcol,q=f.q.toLowerCase();
+  let L=stPlayersOwned();
+  if(q)L=L.filter(x=>x.name.toLowerCase().includes(q)||(x.club||'').toLowerCase().includes(q));
+  if(f.pos)L=L.filter(x=>x.pos===f.pos||(f.pos==='DEF'&&ST_SECTOR(x.pos)==='def'&&x.pos!=='GK')||(f.pos==='MEI'&&ST_SECTOR(x.pos)==='mid')||(f.pos==='ATA'&&ST_SECTOR(x.pos)==='fwd'));
+  L.sort((a,b)=>b.ovr-a.ovr);
+  return L.slice(0,80).map(x=>`<div class="st-dragc" data-drag="${x.id}" data-act="cardinfo" data-id="${x.id}">${stCardHTML(x,{size:'sm',tilt:false,badge:sq.slots.includes(x.id)?'XI':sq.bench.includes(x.id)?'RES':''})}</div>`).join('')||'<p class="st-fine">Nenhuma carta.</p>';
+}
+STA.sqcolq=el=>{ST.sqcol.q=el.value;const g=$('st-sqcol');if(g)g.innerHTML=stSqColHTML()};
+STA.sqcolpos=el=>{ST.sqcol.pos=el.value;const g=$('st-sqcol');if(g)g.innerHTML=stSqColHTML()};
 STA.sqtab=el=>{ST.club.sq=+el.dataset.i;stSave();stGo('squad',null,true)};
 STA.sqname=()=>stPrompt('Nome do esquadrão',stSq().name,v=>{v=v.trim().slice(0,20);if(v){stSq().name=v;stSave();stGo('squad',null,true)}},{max:20});
 STA.sqform=el=>{stRearrange(stSq(),el.value);stSave({pub:true});stGo('squad',null,true)};

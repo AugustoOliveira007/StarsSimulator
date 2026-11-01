@@ -56,6 +56,7 @@ async function stLoadCfg(force){
   ST.cfgT=Date.now();
   const r=await stGet('/cfg');
   if(r.ok&&r.data)ST.cfg={champOpen:!!r.data.champOpen,useReg:r.data.useReg!==false,notice:r.data.notice||''};
+  if(typeof stCatLoad==='function')await stCatLoad(force);
 }
 
 /* ---------- Clube: criação, normalização e persistência ---------- */
@@ -119,7 +120,7 @@ function stPubDoc(){
   const ch=stChem(sq.slots.map(id=>c.cards[id]),sq.formation,c.cards[c.mgr]);
   const st=c.cards[c.stad];
   return{user:currentUser,name:c.name,code:c.code,crest:c.crest,kits:c.kits,ball:c.ball,formation:sq.formation,atk:sq.atk,def:sq.def,
-    xi:sq.slots.map(id=>c.cards[id]),bench:sq.bench.map(id=>c.cards[id]||''),captain:sq.captain,pk:sq.pk,mgr:c.cards[c.mgr]||'',stad:st?{name:st.name,cap:st.cap,hue:st.hue}:'',
+    xi:sq.slots.map(id=>c.cards[id]),bench:sq.bench.map(id=>c.cards[id]||''),captain:sq.captain,pk:sq.pk,mgr:c.cards[c.mgr]||'',stad:st?{name:st.name,cap:st.cap,hue:st.hue,pid:st.pid}:'',
     ovr:stTeamOvr(sq.slots.map(id=>c.cards[id])),chem:ch.total,div:c.rv.div,rating:Math.round(c.rv.rating),w:c.st.w,p:c.st.p,
     chw:c.ch.wk===stWeekId()?c.ch.wins:0,chp:c.ch.wk===stWeekId()?c.ch.played:0,upd:SV};
 }
@@ -155,11 +156,12 @@ function stMakeManager(m){return{id:stUid(),pid:m.id,kind:'manager',name:m.name,
 function stMakeStadium(s){return{id:stUid(),pid:s.id,kind:'stadium',name:s.name,cap:s.cap,hue:s.hue,rar:'comum',ovr:0,pos:'EST',alt:[],stats:[0,0,0,0,0,0],got:Date.now()}}
 const stIsPlayer=c=>c&&c.kind==='player';
 function stCardPhoto(c){
+  if(c&&c.src==='c'){const d=ST.cat&&ST.cat.custom[c.pid];if(d&&d.img)return d.img}
   if(c&&c.src==='r'&&c.rp){const p=players.find(x=>x.id===c.rp);if(p&&p.photo&&p.photo!==PH)return p.photo}
   return stAvatarURL(c.face,c.hue);
 }
 const stCardTier=c=>c.kind==='player'?stTier(c.ovr):'ouro';
-const stCardThemeKey=c=>c.rar==='totw'?'totw':c.rar==='heroi'?'heroi':c.rar==='idolo'?'idolo':c.rar==='raro'?'raro-'+stTier(c.ovr):stTier(c.ovr);
+const stCardThemeKey=c=>c.rar==='especial'?'esp-'+(((ST.cat&&ST.cat.custom[c.pid])||{}).theme||'ouro'):c.rar==='totw'?'totw':c.rar==='heroi'?'heroi':c.rar==='idolo'?'idolo':c.rar==='raro'?'raro-'+stTier(c.ovr):stTier(c.ovr);
 const stClubCards=()=>Object.values(ST.club.cards);
 const stPlayersOwned=()=>stClubCards().filter(stIsPlayer);
 
@@ -177,10 +179,10 @@ function stRegPool(){
   return out;
 }
 function stPool(){
-  const base=ST_DB.players;
+  const base=ST_DB.players.filter(p=>!p.noPack);
   return base.concat(stTotwOfWeek(stWeekId())).concat(stRegPool());
 }
-const stRarW={comum:1,raro:.8,totw:.3,heroi:.22,idolo:.1};
+const stRarW={comum:1,raro:.8,totw:.3,heroi:.22,idolo:.1,especial:.15};
 function stPickFrom(pool,lo,hi,o){
   o=o||{};
   let L=pool.filter(p=>p.ovr>=lo&&p.ovr<=hi&&(!o.rareOnly||p.rar!=='comum')&&(!o.pos||p.pos===o.pos||(p.alt||[]).includes(o.pos)));
@@ -195,7 +197,7 @@ function stPickFrom(pool,lo,hi,o){
 function stRollPack(type,club){
   const P=ST_PACKS[type];club=club||ST.club;
   if(P.kind==='manager'){const own=new Set(Object.values(club.cards).filter(c=>c.kind==='manager').map(c=>c.pid));const L=ST_MANAGERS.filter(m=>!own.has(m.id));return[stMakeManager((L.length?L:ST_MANAGERS)[Math.floor(Math.random()*(L.length||ST_MANAGERS.length))])]}
-  if(P.kind==='stadium'){const own=new Set(Object.values(club.cards).filter(c=>c.kind==='stadium').map(c=>c.pid));const L=ST_STADIUMS.filter(m=>!own.has(m.id));const pk=L.length?L:ST_STADIUMS;return[stMakeStadium(pk[Math.floor(Math.random()*pk.length)])]}
+  if(P.kind==='stadium'){const own=new Set(Object.values(club.cards).filter(c=>c.kind==='stadium').map(c=>c.pid));const ALLS=stStadiumsAll(),L=ALLS.filter(m=>!own.has(m.id));const pk=L.length?L:ALLS;return[stMakeStadium(pk[Math.floor(Math.random()*pk.length)])]}
   if(P.kind==='starter')return stStarterCards(club.user||currentUser);
   const pool=stPool(),owned=new Set(Object.values(club.cards).filter(stIsPlayer).map(c=>c.pid));
   let range;
@@ -217,7 +219,7 @@ function stRollPack(type,club){
 function stStarterCards(user){
   const rng=stRng('starter:'+stKey(user)),L=rng.pick(ST_LEAGUES),nat=rng.pick(ST_NAT_CODES);
   const want=[['GK',2],['CB',4],['LB',2],['RB',2],['CDM',2],['CM',3],['CAM',1],['LW',2],['RW',2],['ST',3]];
-  const pool=ST_DB.players.filter(p=>p.src==='g'),used=new Set(),out=[];
+  const pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&!p.noPack&&p.ovr<=80),used=new Set(),out=[];
   const stars=new Set(['ST','CM','CB']);let starsLeft=3;
   want.forEach(([pos,n])=>{
     for(let i=0;i<n;i++){
@@ -228,6 +230,7 @@ function stStarterCards(user){
       if(pref.length&&rng()<.7)cand=pref;
       if(!cand.length)cand=pool.filter(p=>!used.has(p.id)&&p.pos===pos);
       cand.sort((a,b)=>Math.abs(a.ovr-(star?76:64))-Math.abs(b.ovr-(star?76:64))+(rng()-.5)*8);
+      if(!cand.length)cand=ST_DB.players.filter(p=>!used.has(p.id)&&p.pos!=='GK'===(pos!=='GK'));
       const p=cand[0];used.add(p.id);if(star)starsLeft--;
       out.push(stMakeCard(p));
     }
@@ -427,6 +430,8 @@ async function stInboxPoll(){
       if(m.type==='gift'){stGrant({coins:m.coins||0,packs:Array.isArray(m.packs)?m.packs:m.packs?Object.values(m.packs):[]});stNote('🎁 Presente do MingauCoach: '+stRewardText({coins:m.coins||0,packs:Array.isArray(m.packs)?m.packs:m.packs?Object.values(m.packs):[]}))}
       else if(m.type==='duel'){stNote(`⚔️ ${m.from} jogou contra o seu time (${m.mode}): ${m.gf} x ${m.ga}.`)}
       else if(m.type==='note'){stNote(m.text||'')}
+      else if(m.type==='addcard'){const cd=stCardFromPid(m.pid);if(cd){stAddCards([cd]);stNote('🎁 O MingauCoach adicionou a carta '+cd.name+' ao seu clube.')}}
+      else if(m.type==='rmcard'){const k=Object.values(c.cards).find(x=>x.id===m.cardId||(m.pid&&x.pid===m.pid));if(k){stRemoveCard(k.id);stNote('O MingauCoach removeu a carta '+k.name+' do seu clube.')}}
     }
     stDel('/inbox/'+key+'/'+id);
   }
@@ -545,7 +550,7 @@ async function stMarketProcess(){
 }
 /* mercado do sistema: lista por hora, igual para todos, com compra imediata a 125% do valor */
 function stNpcListings(){
-  const bucket=Math.floor(Date.now()/3600e3),rng=stRng('npc:'+bucket),pool=ST_DB.players.filter(p=>p.src==='g'&&p.ovr>=52&&p.ovr<=87),out=[];
+  const bucket=Math.floor(Date.now()/3600e3),rng=stRng('npc:'+bucket),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&!p.noPack&&p.ovr>=52&&p.ovr<=87),out=[];
   for(let i=0;i<40;i++){
     const w=rng(),lo=w<.45?52:w<.8?62:w<.95?72:78,cand=pool.filter(p=>p.ovr>=lo&&p.ovr<=lo+8);
     const p=rng.pick(cand),card={id:'npc'+bucket+'x'+i,pid:p.id,kind:'player',name:p.name,pos:p.pos,alt:p.alt,ovr:p.ovr,nat:p.nat,league:p.league,leagueN:p.leagueN,club:p.club,clubId:p.clubId,stats:p.stats,rar:p.rar,face:p.face,hue:p.hue,src:'g'};

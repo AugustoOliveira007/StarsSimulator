@@ -7,16 +7,17 @@ const stColorDist=(a,b)=>{const A=stColorRGB(a),B=stColorRGB(b);return Math.hypo
 function stUserSpec(){
   const c=ST.club,sq=c.squads[c.sq],xi=sq.slots.map(id=>c.cards[id]),st=c.cards[c.stad],mg=c.cards[c.mgr];
   const ch=stChem(xi,sq.formation,mg);
-  return{user:currentUser,name:c.name,code:c.code,crest:c.crest,kits:c.kits,ball:c.ball,formation:sq.formation,atk:sq.atk,def:sq.def,xi,bench:sq.bench.map(id=>c.cards[id]||null),captain:sq.captain,pk:sq.pk,mgr:mg||null,stad:st?{name:st.name,cap:st.cap,hue:st.hue}:null,ovr:stTeamOvr(xi),chem:ch.total,div:c.rv.div,rating:Math.round(c.rv.rating)};
+  return{user:currentUser,name:c.name,code:c.code,crest:c.crest,kits:c.kits,ball:c.ball,formation:sq.formation,atk:sq.atk,def:sq.def,xi,bench:sq.bench.map(id=>c.cards[id]||null),captain:sq.captain,pk:sq.pk,mgr:mg||null,stad:st?{name:st.name,cap:st.cap,hue:st.hue,pid:st.pid}:null,ovr:stTeamOvr(xi),chem:ch.total,div:c.rv.div,rating:Math.round(c.rv.rating)};
 }
 function stGenAi(target,tag){
   const rng=stRng('ai:'+tag+':'+Date.now()+':'+Math.random());
   const forms=['4-3-3','4-4-2','4-2-3-1','4-1-2-1-2','3-5-2'].filter(f=>FORMS[f]),form=rng.pick(forms),F=FORMS[form];
-  const pool=target>=84?ST_DB.players:ST_DB.players.filter(p=>p.src==='g'),club=rng.pick(ST_DB.clubs),used=new Set();
+  const pool=target>=84?ST_DB.players:ST_DB.players.filter(p=>p.src==='g'||p.src==='c'),club=rng.pick(ST_DB.clubs),used=new Set();
   const pickFor=(pos,tg)=>{
     let cand=pool.filter(p=>!used.has(p.id)&&(p.pos===pos||(p.alt||[]).includes(pos)));
     if(!cand.length)cand=pool.filter(p=>!used.has(p.id)&&((pos==='GK')===(p.pos==='GK')));
     cand=cand.map(p=>({p,s:Math.abs(p.ovr-tg)+rng()*7})).sort((a,b)=>a.s-b.s);
+    if(!cand.length)cand=ST_DB.players.map(p=>({p,s:Math.random()}));
     const p=cand[0].p;used.add(p.id);return p;
   };
   let xiB=F.map(([pos])=>pickFor(pos,target));
