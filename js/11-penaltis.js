@@ -11,7 +11,7 @@ function pkOrder(side){
   return off?[off,...rest]:rest;
 }
 function openPK(cfg){
-  PK={...cfg,sc:{home:0,away:0},kicks:{home:[],away:[]},used:{home:new Set(),away:new Set()},cur:null,busy:true,result:null};
+  PK={...cfg,sc:{home:0,away:0},kicks:{home:[],away:[]},used:{home:new Set(),away:new Set()},cur:null,busy:true,result:null,on:!!(cfg.rm&&(cfg.rm.home||cfg.rm.away))};
   $('m-pk').classList.add('on');pkNext();
 }
 function pkScore(){
@@ -37,6 +37,29 @@ function pkPick(id){
   const k=PK.order.find(p=>p.id===id);if(!k)return;
   PK.cur.kicker=k;pkChips();
 }
+/* ---- Pênaltis online: o anfitrião decide, o adversário remoto escolhe o canto pela rede ---- */
+function pkOnline(sd,ds,k,lbl,tm){
+  PK.oid=(PK.oid||0)+1;PK.zs=null;PK.zg=null;PK.busy=false;
+  const localKick=!PK.rm[sd];
+  PK.how=localKick?'shoot':'dive';
+  $('pk-info').textContent=localKick?`${lbl}${tm.name} cobra. Toque no canto do gol (15s).`:`${lbl}${k.name} (${tm.name}) vai cobrar. Toque no canto onde o goleiro vai pular (15s)!`;
+  if(typeof stOnPush==='function')stOnPush({k:'pkq',id:PK.oid,mode:PK.mode,title:PK.title,sd,kn:k.name,tm:tm.name,lbl,sc:{...PK.sc},kk:{home:[...PK.kicks.home],away:[...PK.kicks.away]}});
+  const pk=PK,id=PK.oid;
+  clearTimeout(PK.tmo);
+  PK.tmo=setTimeout(()=>{if(PK!==pk||PK.oid!==id)return;if(PK.zs==null)PK.zs=wr(ZW);if(PK.zg==null)PK.zg=wr(DW);pkOnTry()},15500);
+}
+function pkOnTry(){
+  if(!PK||!PK.on||PK.zs==null||PK.zg==null)return;
+  clearTimeout(PK.tmo);PK.busy=true;
+  const z=PK.zs,g=PK.zg;PK.zs=PK.zg=null;PK.how='auto';
+  pkResolve(z,g);
+}
+/* comando remoto de pênalti (vindo do convidado) */
+function pkRemote(id,z){
+  if(!PK||!PK.on||PK.oid!==id||!(z>=0&&z<=5))return;
+  if(PK.how==='shoot'){if(PK.zg==null)PK.zg=z}else{if(PK.zs==null)PK.zs=z}
+  pkOnTry();
+}
 function pkNext(){
   if(PK.mode==='shootout'){const r=pkWinner();if(r)return pkEnd(r)}
   const sd=PK.mode==='single'?PK.side:(PK.kicks.home.length<=PK.kicks.away.length?'home':'away'),ds=sd==='home'?'away':'home';
@@ -50,6 +73,7 @@ function pkNext(){
   $('pk-title').textContent=PK.title;$('pk-done').style.display='none';$('pk-msg').textContent='';
   pkScore();resetPkView();pkChips();
   const lbl=PK.mode==='shootout'?`Cobrança ${PK.kicks[sd].length+1} • `:'';
+  if(PK.on&&(PK.rm[sd]||PK.rm[ds]))return pkOnline(sd,ds,k,lbl,tm);
   if(PK.ctl[sd]){
     PK.how='shoot';PK.busy=false;
     $('pk-info').textContent=`${lbl}${tm.name} cobra.${PK.mode==='single'?' Escolha o batedor acima e':''} Toque no canto do gol.`;
@@ -63,6 +87,8 @@ function pkNext(){
 }
 function pkClick(z){
   if(!PK||PK.busy)return;PK.busy=true;
+  if(PK.mirror)return stOnGuestPk(z);
+  if(PK.on&&PK.how!=='auto'){if(PK.how==='shoot')PK.zs=z;else PK.zg=z;return pkOnTry()}
   if(PK.how==='shoot')pkResolve(z,wr(DW));else pkResolve(wr(ZW),z);
 }
 function pkResolve(z,g){
@@ -80,12 +106,14 @@ function pkResolve(z,g){
   const ok=res==='goal';PK.kicks[PK.sd].push(ok);if(ok)PK.sc[PK.sd]++;
   $('pk-msg').innerHTML=ok?'⚽ GOOOL!'+(note?`<div style="font:600 .9rem var(--fb);color:#cfd8e3;margin-top:.2rem">🧤 ${note}</div>`:''):res==='saved'?'🧤 DEFENDEU!':'❌ PRA FORA!';
   pkScore();
+  if(PK.on&&typeof stOnPush==='function')stOnPush({k:'pkr',id:PK.oid,sd:PK.sd,kn:k.name,z,g,res,note,sc:{...PK.sc},kk:{home:[...PK.kicks.home],away:[...PK.kicks.away]}});
   setTimeout(()=>{if(PK.mode==='single'){$('m-pk').classList.remove('on');PK.cb(res,k)}else pkNext()},note?2100:1600);
 }
 function pkEnd(r){
   PK.result={winner:r,h:PK.sc.home,a:PK.sc.away};
   $('pk-msg').textContent=`🏆 ${PK.teams[r].name} vence nos pênaltis! (${PK.sc.home} x ${PK.sc.away})`;
   $('pk-info').textContent='';$('pk-order').innerHTML='';$('pk-done').style.display='';
+  if(PK.on){if(typeof stOnPush==='function')stOnPush({k:'pke',winner:r,h:PK.sc.home,a:PK.sc.away,wn:PK.teams[r].name});const pk=PK;setTimeout(()=>{if(PK===pk&&PK.result&&$('m-pk').classList.contains('on'))pkDone()},4500)}
 }
 function pkDone(){$('m-pk').classList.remove('on');PK.cb(PK.result)}
 function openShootout(){
@@ -95,9 +123,10 @@ function openShootout(){
 }
 function matchPenalty(sd){
   const team=sd==='home'?M.h:M.a;
-  const go=()=>openPK({mode:'single',title:'⚠️ PÊNALTI',side:sd,teams:{home:M.h,away:M.a},ls:{home:M.lh,away:M.la},ctl:M.ctl,cb(res,k){
+  const go=()=>openPK({mode:'single',title:'⚠️ PÊNALTI',side:sd,teams:{home:M.h,away:M.a},ls:{home:M.lh,away:M.la},ctl:M.ctl,rm:M.rm,cb(res,k){
+    M.st[sd].shots++;
     if(res==='goal'){setBall(sd==='home'?98.3:1.7,50);Q(goalItem(sd,k,true))}
-    else{tick(`❌ ${k.name} ${res==='saved'?'teve o pênalti defendido':'chutou para fora'}! (${clock()})`);Q(banner({word:res==='saved'?'DEFENDEU!':'PRA FORA!',neutral:1,sub:`${k.name} desperdiçou o pênalti`,ms:1800}))}
+    else{if(res==='saved'){M.st[sd].on++;M.st[sd==='home'?'away':'home'].saves++}tick(`❌ ${k.name} ${res==='saved'?'teve o pênalti defendido':'chutou para fora'}! (${clock()})`);Q(banner({word:res==='saved'?'DEFENDEU!':'PRA FORA!',neutral:1,sub:`${k.name} desperdiçou o pênalti`,ms:1800}))}
   }});
   if(Math.random()<.22){
     M.hs.var++;

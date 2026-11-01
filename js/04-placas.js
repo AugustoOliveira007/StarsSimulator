@@ -27,14 +27,16 @@ function fitSide(){
     });
   });
 }
+let AD_OVR=null;   /* placas próprias de um modo do StarsTeam (null = usa as padrão) */
+function adUse(o){AD_OVR=o&&o.list&&o.list.length?o:null;adIx=0;renderAds()}
 function renderAds(){
-  const L=ADS.list;
+  const A=AD_OVR||ADS,L=A.list;
   document.querySelectorAll('.adb').forEach(b=>{
     if(!L.length){b.innerHTML=adTxt();return}
     b.innerHTML=L.map((a,i)=>`<div class="adi ${i===adIx%L.length?'on':''}" style="${adBgCss(a)}"></div>`).join('');
   });
   fitSide();clearInterval(adT);
-  if(L.length>1)adT=setInterval(()=>{adIx++;document.querySelectorAll('.adb').forEach(b=>b.querySelectorAll('.adi').forEach((e,i,a)=>e.classList.toggle('on',i===adIx%a.length)))},(ADS.sec||5)*1000);
+  if(L.length>1)adT=setInterval(()=>{adIx++;document.querySelectorAll('.adb').forEach(b=>b.querySelectorAll('.adi').forEach((e,i,a)=>e.classList.toggle('on',i===adIx%a.length)))},(A.sec||5)*1000);
 }
 function adStamp(){
   ADS.del=ADS.del||{};ADS.list=ADS.list||[];

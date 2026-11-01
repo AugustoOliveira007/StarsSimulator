@@ -55,7 +55,7 @@ async function stLoadCfg(force){
   if(!force&&Date.now()-ST.cfgT<20000)return;
   ST.cfgT=Date.now();
   const r=await stGet('/cfg');
-  if(r.ok&&r.data)ST.cfg={champOpen:!!r.data.champOpen,useReg:r.data.useReg!==false,notice:r.data.notice||''};
+  if(r.ok&&r.data){const was=ST.cfg.useReg;ST.cfg={champOpen:!!r.data.champOpen,useReg:r.data.useReg!==false,notice:r.data.notice||''};if(was!==ST.cfg.useReg&&typeof stRegRefresh==='function')stRegRefresh(true)}
   if(typeof stCatLoad==='function')await stCatLoad(force);
 }
 
@@ -64,7 +64,7 @@ function stBlankSquad(n,form){return{name:n||'Esquadrão',formation:form||'4-3-3
 function stNewClub(o){
   return{v:1,rev:0,created:Date.now(),user:currentUser,name:o.name,code:o.code,crest:o.crest,kits:o.kits,ball:o.ball||'b1',
     coins:ST_START_COINS,cards:{},packs:[],squads:[stBlankSquad('Esquadrão 1'),stBlankSquad('Esquadrão 2'),stBlankSquad('Esquadrão 3')],sq:0,mgr:'',stad:'',
-    st:{p:0,w:0,d:0,l:0,gf:0,ga:0},rv:{wk:stWeekId(),wins:0,games:0,pts:0,div:10,rating:1000,claimed:{},streak:0,hist:[]},
+    st:{p:0,w:0,d:0,l:0,gf:0,ga:0},on:{rating:1000,w:0,d:0,l:0},rv:{wk:stWeekId(),wins:0,games:0,pts:0,div:10,rating:1000,claimed:{},streak:0,hist:[]},
     sb:{wk:stWeekId(),pts:0,claimed:{},played:0},ch:{wk:'',qual:false,po:false,played:0,wins:0,pts:0,res:[],claimed:false,active:false},chPending:[],
     draft:null,obj:{},sbc:{},mk:{},esc:{},npc:{},done:{},daily:0,log:[],msgs:[],pend:null,seen:{},tut:{}};
 }
@@ -73,7 +73,7 @@ function stNormalize(c){
   const d=stNewClub({name:c.name,code:c.code,crest:c.crest,kits:c.kits});
   ['cards','mk','esc','npc','done','obj','sbc','seen','tut'].forEach(k=>{if(!c[k]||typeof c[k]!=='object')c[k]={}});
   ['packs','chPending','log','msgs'].forEach(k=>{c[k]=Array.isArray(c[k])?c[k]:c[k]?Object.values(c[k]):[]});
-  c.st=Object.assign({},d.st,c.st);c.rv=Object.assign({},d.rv,c.rv);c.sb=Object.assign({},d.sb,c.sb);c.ch=Object.assign({},d.ch,c.ch);
+  c.st=Object.assign({},d.st,c.st);c.on=Object.assign({},d.on,c.on);c.rv=Object.assign({},d.rv,c.rv);c.sb=Object.assign({},d.sb,c.sb);c.ch=Object.assign({},d.ch,c.ch);
   ['claimed'].forEach(k=>{c.rv[k]=c.rv[k]||{};c.sb[k]=c.sb[k]||{}});
   c.rv.hist=Array.isArray(c.rv.hist)?c.rv.hist:c.rv.hist?Object.values(c.rv.hist):[];
   c.ch.res=Array.isArray(c.ch.res)?c.ch.res:c.ch.res?Object.values(c.ch.res):[];
@@ -165,22 +165,10 @@ const stCardThemeKey=c=>c.rar==='especial'?'esp-'+(((ST.cat&&ST.cat.custom[c.pid
 const stClubCards=()=>Object.values(ST.club.cards);
 const stPlayersOwned=()=>stClubCards().filter(stIsPlayer);
 
-/* atletas cadastrados no jogo viram cartas (opcional) */
-function stRegPool(){
-  if(!ST.cfg.useReg)return[];
-  const out=[];
-  players.forEach(p=>{
-    if(!p||!p.id||!p.name)return;
-    const t=teamOf(p.teamId);if(t&&t.priv)return;
-    const pr=stRng('reg:'+p.id),ovr=stClamp(Math.round(+p.ovr||60),40,99),pos=ST_PROFILE[p.pos]?p.pos:'CM',prof=ST_PROFILE[pos];
-    const lg=t&&t.leagueId?leagues.find(l=>l.id===t.leagueId):null;
-    out.push({id:'r'+p.id,rp:p.id,name:p.name,pos,alt:(ST_POS_ALT[pos]||[]).filter(()=>pr()<.5),ovr,nat:ST_NATIONS[p.nat]?p.nat:'',league:lg?'rl:'+lg.id:'',leagueN:lg?lg.name:'',club:t?t.name:'Sem clube',clubId:t?'rt:'+t.id:'',stats:prof.map(o=>stClamp(Math.round(ovr+o+pr.gauss()*3),18,99)),rar:ovr>=78?'raro':'comum',face:{sk:pr.int(0,5),hr:pr.int(0,6),st:pr.int(0,5)},hue:pr.int(0,359),src:'r'});
-  });
-  return out;
-}
+/* (os atletas cadastrados em Times agora fazem parte de ST_DB.players: ver 28-st-registro.js) */
 function stPool(){
   const base=ST_DB.players.filter(p=>!p.noPack);
-  return base.concat(stTotwOfWeek(stWeekId())).concat(stRegPool());
+  return base.concat(stTotwOfWeek(stWeekId()));
 }
 const stRarW={comum:1,raro:.8,totw:.3,heroi:.22,idolo:.1,especial:.15};
 function stPickFrom(pool,lo,hi,o){
@@ -219,7 +207,7 @@ function stRollPack(type,club){
 function stStarterCards(user){
   const rng=stRng('starter:'+stKey(user)),L=rng.pick(ST_LEAGUES),nat=rng.pick(ST_NAT_CODES);
   const want=[['GK',2],['CB',4],['LB',2],['RB',2],['CDM',2],['CM',3],['CAM',1],['LW',2],['RW',2],['ST',3]];
-  const pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&!p.noPack&&p.ovr<=80),used=new Set(),out=[];
+  const pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c'||p.src==='r')&&!p.noPack&&p.ovr<=80),used=new Set(),out=[];
   const stars=new Set(['ST','CM','CB']);let starsLeft=3;
   want.forEach(([pos,n])=>{
     for(let i=0;i<n;i++){
@@ -430,6 +418,8 @@ async function stInboxPoll(){
       if(m.type==='gift'){stGrant({coins:m.coins||0,packs:Array.isArray(m.packs)?m.packs:m.packs?Object.values(m.packs):[]});stNote('🎁 Presente do MingauCoach: '+stRewardText({coins:m.coins||0,packs:Array.isArray(m.packs)?m.packs:m.packs?Object.values(m.packs):[]}))}
       else if(m.type==='duel'){stNote(`⚔️ ${m.from} jogou contra o seu time (${m.mode}): ${m.gf} x ${m.ga}.`)}
       else if(m.type==='note'){stNote(m.text||'')}
+      else if(m.type==='coins'){const d=Math.round(+m.delta||0),b=c.coins;c.coins=Math.max(0,b+d);const r=c.coins-b;stNote(r>=0?`🪙 O MingauCoach adicionou ${stFmt(r)} moedas ao seu clube.`:`🪙 O MingauCoach removeu ${stFmt(-r)} moedas do seu clube.`)}
+      else if(m.type==='invite'){stNote(`🌐 ${m.from} convidou você para jogar online. Abra Jogar › Online e entre na sala dele.`)}
       else if(m.type==='addcard'){const cd=stCardFromPid(m.pid);if(cd){stAddCards([cd]);stNote('🎁 O MingauCoach adicionou a carta '+cd.name+' ao seu clube.')}}
       else if(m.type==='rmcard'){const k=Object.values(c.cards).find(x=>x.id===m.cardId||(m.pid&&x.pid===m.pid));if(k){stRemoveCard(k.id);stNote('O MingauCoach removeu a carta '+k.name+' do seu clube.')}}
     }
@@ -550,7 +540,7 @@ async function stMarketProcess(){
 }
 /* mercado do sistema: lista por hora, igual para todos, com compra imediata a 125% do valor */
 function stNpcListings(){
-  const bucket=Math.floor(Date.now()/3600e3),rng=stRng('npc:'+bucket),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&!p.noPack&&p.ovr>=52&&p.ovr<=87),out=[];
+  const bucket=Math.floor(Date.now()/3600e3),rng=stRng('npc:'+bucket),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c'||p.src==='r')&&!p.noPack&&p.ovr>=52&&p.ovr<=87),out=[];
   for(let i=0;i<40;i++){
     const w=rng(),lo=w<.45?52:w<.8?62:w<.95?72:78,cand=pool.filter(p=>p.ovr>=lo&&p.ovr<=lo+8);
     const p=rng.pick(cand),card={id:'npc'+bucket+'x'+i,pid:p.id,kind:'player',name:p.name,pos:p.pos,alt:p.alt,ovr:p.ovr,nat:p.nat,league:p.league,leagueN:p.leagueN,club:p.club,clubId:p.clubId,stats:p.stats,rar:p.rar,face:p.face,hue:p.hue,src:'g'};

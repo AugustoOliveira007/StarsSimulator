@@ -12,6 +12,9 @@ function stCatApply(){
   /* nações extras (com bandeira em imagem) */
   Object.keys(ST_NATIONS).forEach(k=>{if(!ST_ORIG.nations.has(k))delete ST_NATIONS[k]});
   Object.entries(C.nations||{}).forEach(([k,v])=>{if(v&&v.n)ST_NATIONS[k]={n:v.n,f:[],l:[],img:v.img||''}});
+  /* ligas cadastradas no jogo ficam disponíveis para cartas e técnicos */
+  Object.keys(ST_EXTRA_LG).forEach(k=>{if(k.startsWith('rl:'))delete ST_EXTRA_LG[k]});
+  if(typeof stRegLeagueList==='function')stRegLeagueList().forEach(l=>{ST_EXTRA_LG[l.id]=l.n});
   /* jogadores */
   const list=ST_ORIG.players.filter(p=>!C.removed[p.id]);
   stObjVals(C.custom).forEach(d=>{
@@ -20,6 +23,8 @@ function stCatApply(){
     list.push({id:d.id,name:d.name,pos:d.pos,alt:(d.alt||[]).slice(),ovr:+d.ovr,nat:d.nat||'',league:d.league||'',leagueN:d.leagueN||'',club:d.club||'',clubId:d.clubId||('cx:'+stSlug(d.club)),
       stats:(d.stats&&d.stats.length===6?Object.values(d.stats):ST_PROFILE[d.pos].map(o=>stClamp(Math.round(+d.ovr+o),18,99))).map(Number),rar:d.rar||'comum',face:d.face||{sk:2,hr:1,st:1},hue:d.hue||210,src:'c',noPack:!!d.noPack});
   });
+  /* atletas criados na aba Times/Atletas viram cartas base, como as genéricas */
+  if(typeof stRegCards==='function')stRegCards().forEach(p=>{if(!C.removed[p.id])list.push(p)});
   ST_DB.players.length=0;list.forEach(p=>ST_DB.players.push(p));
   Object.keys(ST_DB.byId).forEach(k=>delete ST_DB.byId[k]);ST_DB.players.forEach(p=>{ST_DB.byId[p.id]=p});
   Object.keys(ST_TOTW_CACHE).forEach(k=>delete ST_TOTW_CACHE[k]);

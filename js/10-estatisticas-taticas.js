@@ -8,7 +8,7 @@ function renderStats(){
   [['Chutes','shots'],['Chutes ao alvo','on'],['Escanteios','corners'],['Faltas','fouls'],['Impedimentos','off'],['Cartões amarelos','yc'],['Cartões vermelhos','rc']].forEach(([lab,k])=>{
     const h=s.home[k]||0,a=s.away[k]||0;rows.push([lab,h,a,share(h,a)]);
   });
-  const sv1=Math.max(0,s.away.on-M.sa),sv2=Math.max(0,s.home.on-M.sh);
+  const sv1=s.home.saves||0,sv2=s.away.saves||0;
   rows.push(['Defesas',sv1,sv2,share(sv1,sv2)]);
   box.className='hud';box.style.setProperty('--c1',c1h);
   box.innerHTML=`<div class="hdr"><span class="tm" style="color:${c2(M.h)}">${esc(M.h.code)}</span><span class="mid">${esc(M.h.name)} x ${esc(M.a.name)}</span><span class="tm" style="color:${c2(M.a)}">${esc(M.a.code)}</span></div>`+
@@ -84,7 +84,7 @@ function cpuAdvise(side){
 function cpuTac(){
   ['home','away'].forEach(s=>{
     const P=cpuPers(s);
-    if(M.ctl[s]||M.min<12||M.min-M.tacT[s]<(9+Math.round(P.risk*6)+Math.floor(rnd(0,5)))||Math.random()>.45)return;
+    if(M.ctl[s]||(M.rm&&M.rm[s])||M.min<12||M.min-M.tacT[s]<(9+Math.round(P.risk*6)+Math.floor(rnd(0,5)))||Math.random()>.45)return;
     const v=cpuAdvise(s);if(!v)return;
     M.tac[s].atk=v.atk;M.tac[s].def=v.def;M.tacT[s]=M.min;
     tick(`🧠 ${(s==='home'?M.h:M.a).name} ajusta a tática (${v.why}): ${ATK[v.atk].n} • ${DEF[v.def].n} (${clock()})`);

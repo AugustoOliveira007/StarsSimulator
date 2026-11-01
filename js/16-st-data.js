@@ -241,7 +241,7 @@ function stIsWeekend(d){const wd=new Date(d||Date.now()).getDay();return wd===6|
 const ST_TOTW_CACHE={};
 function stTotwOfWeek(wid){
   if(ST_TOTW_CACHE[wid])return ST_TOTW_CACHE[wid];
-  const rng=stRng('totw:'+wid),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c')&&p.ovr>=70&&p.ovr<=90);
+  const rng=stRng('totw:'+wid),pool=ST_DB.players.filter(p=>(p.src==='g'||p.src==='c'||p.src==='r')&&!p.noPack&&p.ovr>=70&&p.ovr<=90);
   const out=[],seen=new Set();
   while(out.length<12&&seen.size<pool.length){
     const p=rng.pick(pool);if(seen.has(p.id))continue;seen.add(p.id);

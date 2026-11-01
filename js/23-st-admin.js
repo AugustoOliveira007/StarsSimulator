@@ -1,6 +1,6 @@
 /* ===================== STARSTEAM — PAINEL DO ADMIN (somente MingauCoach) ===================== */
 const ST_ADM={list:{},clubs:{},tab:'access',f:{},form:null,uc:null,ucKey:'',cq:'',cflt:{q:'',src:'all',rar:'',pos:''}};
-const ST_ADM_TABS=[['access','Acesso beta'],['cards','Cartas'],['mgrs','Técnicos'],['clubs','Clubes'],['ann','Anúncios'],['cfg','Configurações']];
+const ST_ADM_TABS=[['access','Acesso beta'],['cards','Cartas'],['mgrs','Técnicos'],['clubs','Clubes'],['teams','Times do jogo'],['ads','Placas'],['ann','Anúncios'],['cfg','Configurações']];
 const stFileData=(file,max,cb,type)=>{const r=new FileReader();r.onload=e=>shrinkImg(e.target.result,max,cb,type);r.readAsDataURL(file)};
 const ST_THEMES=[['ouro','Ouro especial'],['rubi','Rubi'],['safira','Safira'],['esmeralda','Esmeralda'],['obsidiana','Obsidiana'],['holo','Holográfico']];
 
@@ -19,10 +19,10 @@ async function stAdmLoad(){
 function stAdmRender(){
   const box=$('stadm-body');if(!box)return;
   const tabs=`<div class="st-tabs">${ST_ADM_TABS.map(([k,n])=>`<button class="${ST_ADM.tab===k?'on':''}" data-act="adm-tab" data-v="${k}">${n}</button>`).join('')}</div>`;
-  const fn={access:stAdmAccess,cards:stAdmCards,mgrs:stAdmMgrs,clubs:stAdmClubs,ann:stAdmAnn,cfg:stAdmCfg}[ST_ADM.tab]||stAdmAccess;
+  const fn={access:stAdmAccess,cards:stAdmCards,mgrs:stAdmMgrs,clubs:stAdmClubs,teams:stAdmTeams,ads:stAdmAds,ann:stAdmAnn,cfg:stAdmCfg}[ST_ADM.tab]||stAdmAccess;
   box.innerHTML=tabs+'<div id="adm-pane">'+fn()+'</div>';
 }
-function stAdmPane(){const p=$('adm-pane');if(p){const fn={access:stAdmAccess,cards:stAdmCards,mgrs:stAdmMgrs,clubs:stAdmClubs,ann:stAdmAnn,cfg:stAdmCfg}[ST_ADM.tab];p.innerHTML=fn()}}
+function stAdmPane(){const p=$('adm-pane');if(p){const fn={access:stAdmAccess,cards:stAdmCards,mgrs:stAdmMgrs,clubs:stAdmClubs,teams:stAdmTeams,ads:stAdmAds,ann:stAdmAnn,cfg:stAdmCfg}[ST_ADM.tab];p.innerHTML=fn()}}
 STA['adm-tab']=el=>{ST_ADM.tab=el.dataset.v;stAdmRender()};
 const stAdmBtn=(act,k,t,cls,extra)=>`<button class="btn sm ${cls||''}" data-act="${act}" data-k="${stAttr(k)}"${extra||''}>${t}</button>`;
 
@@ -59,7 +59,7 @@ STA['adm-giftgo']=async el=>{
 function stAdmCfg(){
   return `<div class="st-card"><h3 class="t">Configurações do StarsTeam</h3>
     <label class="st-chk"><input type="checkbox" ${ST.cfg.champOpen?'checked':''} data-ch="adm-cfg" data-k="champOpen"> Abrir o Champions fora do fim de semana (teste)</label>
-    <label class="st-chk"><input type="checkbox" ${ST.cfg.useReg?'checked':''} data-ch="adm-cfg" data-k="useReg"> Atletas cadastrados no jogo também entram nos pacotes</label>
+    <label class="st-chk"><input type="checkbox" ${ST.cfg.useReg?'checked':''} data-ch="adm-cfg" data-k="useReg"> Atletas cadastrados em Times caem em pacotes, mercado e draft (desmarcado: continuam no catálogo, mas só por presente/admin)</label>
     <label class="st-lbl">Aviso rápido (faixa no topo do hub)</label><div class="row" style="gap:.5rem"><input class="fc" id="adm-notice" value="${stAttr(ST.cfg.notice)}" maxlength="140" style="flex:1"><button class="btn sm" data-act="adm-notice">Publicar</button></div></div>
   <p class="st-fine">Aviso de segurança: o controle de acesso é feito pelo cliente e pelas regras do seu Firebase. Para proteção real, configure as regras do Realtime Database.</p>`;
 }
@@ -71,17 +71,17 @@ const stBaseName=p=>({g:'Genérica',c:'Criada',r:'Cadastrada'})[p.src]||(p.rar==
 function stCatSearch(){
   const f=ST_ADM.cflt,q=f.q.toLowerCase();
   let L=ST_DB.players.slice();
-  if(f.src==='g')L=L.filter(p=>p.src==='g');else if(f.src==='c')L=L.filter(p=>p.src==='c');else if(f.src==='s')L=L.filter(p=>p.rar==='heroi'||p.rar==='idolo');
+  if(f.src==='g')L=L.filter(p=>p.src==='g');else if(f.src==='c')L=L.filter(p=>p.src==='c');else if(f.src==='r')L=L.filter(p=>p.src==='r');else if(f.src==='s')L=L.filter(p=>p.rar==='heroi'||p.rar==='idolo');
   if(f.rar)L=L.filter(p=>p.rar===f.rar);if(f.pos)L=L.filter(p=>p.pos===f.pos);
   if(q)L=L.filter(p=>p.name.toLowerCase().includes(q)||(p.club||'').toLowerCase().includes(q)||(p.leagueN||'').toLowerCase().includes(q));
   return L.sort((a,b)=>b.ovr-a.ovr);
 }
 function stAdmCards(){
   const f=ST_ADM.cflt,L=stCatSearch(),rem=Object.keys(ST.cat.removed||{});
-  const nameOf=id=>{const p=ST_ORIG.players.find(x=>x.id===id)||ST_ORIG.mgrs.find(x=>x.id===id);return p?p.name:id};
+  const nameOf=id=>{const p=ST_ORIG.players.find(x=>x.id===id)||ST_ORIG.mgrs.find(x=>x.id===id)||(typeof players!=='undefined'&&players.find(x=>'r'+x.id===id));return p?p.name:id};
   return `<div class="st-card"><div class="row" style="justify-content:space-between"><h3 class="t">Catálogo (${ST_DB.players.length} cartas de jogador)</h3><button class="btn" data-act="adm-newcard">➕ Nova carta</button></div>
   <div class="st-filters"><input class="fc" id="adm-cq" placeholder="Buscar nome, clube ou liga…" value="${stAttr(f.q)}" data-in="adm-cq" style="max-width:240px">
-    <select class="fc" data-ch="adm-cflt" data-k="src"><option value="all">Todas</option><option value="g" ${f.src==='g'?'selected':''}>Genéricas</option><option value="c" ${f.src==='c'?'selected':''}>Criadas por você</option><option value="s" ${f.src==='s'?'selected':''}>Heróis e Ídolos</option></select>
+    <select class="fc" data-ch="adm-cflt" data-k="src"><option value="all">Todas</option><option value="g" ${f.src==='g'?'selected':''}>Genéricas</option><option value="c" ${f.src==='c'?'selected':''}>Criadas por você</option><option value="r" ${f.src==='r'?'selected':''}>Cadastradas em Times</option><option value="s" ${f.src==='s'?'selected':''}>Heróis e Ídolos</option></select>
     <select class="fc" data-ch="adm-cflt" data-k="rar"><option value="">Raridade</option>${['comum','raro','heroi','idolo','especial'].map(r=>`<option ${f.rar===r?'selected':''}>${r}</option>`).join('')}</select>
     <select class="fc" data-ch="adm-cflt" data-k="pos"><option value="">Posição</option>${Object.keys(ST_PROFILE).map(r=>`<option ${f.pos===r?'selected':''}>${r}</option>`).join('')}</select>
     ${L.length&&L.length<ST_DB.players.length?`<button class="btn sec sm" data-act="adm-rmall">🗑 Remover os ${L.length} resultados do jogo</button>`:''}</div>
@@ -125,8 +125,8 @@ function stNatOptions(sel){return Object.entries(ST_NATIONS).map(([k,v])=>`<opti
 function stLeagueOptions(sel){return ST_DB.leagues.map(l=>`<option value="${l.id}" ${l.id===sel?'selected':''}>${esc(l.n)}</option>`).join('')+Object.entries(ST_EXTRA_LG).map(([k,n])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(n)}</option>`).join('')+`<option value="__new">➕ Outra liga…</option>`}
 STA['adm-newcard']=()=>stCardForm(null);
 STA['adm-editcard']=el=>stCardForm(ST.cat.custom[el.dataset.k]);
-function stCardForm(d){
-  const e=!!d;d=d||{name:'',pos:'ST',alt:[],ovr:75,nat:'BRA',league:ST_DB.leagues[0].id,club:'',rar:'comum',theme:'ouro'};
+function stCardForm(d,pre){
+  const e=!!d;d=d||Object.assign({name:'',pos:'ST',alt:[],ovr:75,nat:'BRA',league:ST_DB.leagues[0].id,club:'',rar:'comum',theme:'ouro'},pre||{});
   ST_ADM.form={id:d.id||('c'+stUid()),img:d.img||'',crestImg:d.crestImg||'',frame:d.frame||'',nflag:''};
   const stats=d.stats&&d.stats.length===6?d.stats:ST_PROFILE[d.pos].map(o=>stClamp(Math.round(+d.ovr+o),18,99));
   stModal(`<h3 class="t">${e?'Editar':'Nova'} carta de jogador</h3><div class="st-form">
@@ -138,7 +138,7 @@ function stCardForm(d){
      <div class="fg" style="flex:1"><label>Liga</label><select class="fc" id="cf-lg" data-ch="adm-cflg">${stLeagueOptions(d.league)}</select></div></div>
    <div id="cf-newnat" style="display:none" class="row"><input class="fc" id="cf-nname" placeholder="Nome da nação" style="flex:1"><label class="upl st-upl">🏳️ Bandeira<input type="file" accept="image/*" hidden data-ch="adm-cfflag"></label></div>
    <div id="cf-newlg" style="display:none"><input class="fc" id="cf-lname" placeholder="Nome da nova liga"></div>
-   <div class="fg"><label>Clube (nome)</label><input class="fc" id="cf-club" list="cf-clubs" maxlength="30" value="${stAttr(d.club||'')}"><datalist id="cf-clubs">${ST_DB.clubs.map(c=>`<option value="${stAttr(c.n)}">`).join('')}</datalist></div>
+   <div class="fg"><label>Clube (nome)</label><input class="fc" id="cf-club" list="cf-clubs" maxlength="30" value="${stAttr(d.club||'')}" data-in="adm-cfclub"><datalist id="cf-clubs">${ST_DB.clubs.map(c=>`<option value="${stAttr(c.n)}">`).join('')}${stRegClubList().map(c=>`<option value="${stAttr(c.n)}" label="Time do jogo">`).join('')}</datalist><small class="st-fine" id="cf-clubhint"></small></div>
    <div class="row" style="gap:.6rem"><div class="fg" style="flex:1"><label>Tipo / raridade</label><select class="fc" id="cf-rar" data-ch="adm-cfrar">${[['comum','Comum'],['raro','Raro'],['heroi','Herói'],['idolo','Ídolo'],['especial','Especial (design próprio)']].map(([k,n])=>`<option value="${k}" ${d.rar===k?'selected':''}>${n}</option>`).join('')}</select></div>
      <div class="fg" style="flex:1" id="cf-themebox" ${d.rar==='especial'?'':'style="display:none"'}><label>Estilo do especial</label><select class="fc" id="cf-theme">${ST_THEMES.map(([k,n])=>`<option value="${k}" ${d.theme===k?'selected':''}>${n}</option>`).join('')}</select></div></div>
    <div class="fg"><label>Estatísticas (${stSq&&0?'':'RIT FIN PAS DRI DEF FIS · goleiro: MER MAN CHU REF VEL POS'}) <button type="button" class="btn sec sm" data-act="adm-cfautobtn">Gerar pelo OVR</button></label><div class="st-stats6">${stats.map((v,i)=>`<input class="fc cf-st" type="number" min="1" max="99" value="${v}">`).join('')}</div></div>
@@ -156,6 +156,11 @@ function stCfSync(){
   if(nat)$('cf-newnat').style.display=nat.value==='__new'?'':'none';
   if(rar)$('cf-themebox').style.display=rar.value==='especial'?'':'none';
 }
+STA['adm-cfclub']=el=>{
+  const c=stRegClubList().find(x=>x.n.toLowerCase()===el.value.trim().toLowerCase()),h=$('cf-clubhint');
+  if(h)h.textContent=c?'Time cadastrado no jogo: o escudo vem do time'+(c.lgN?' e a liga será '+c.lgN:'')+'.':'';
+  if(c&&c.lg&&$('cf-lg')){$('cf-lg').value=c.lg;stCfSync()}
+};
 STA['adm-cfnat']=stCfSync;STA['adm-cflg']=stCfSync;STA['adm-cfrar']=stCfSync;
 STA['adm-cfpos']=()=>STA['adm-cfautobtn']();
 STA['adm-cfauto']=()=>{};
@@ -179,7 +184,7 @@ STA['adm-cfsave']=async el=>{
   else leagueN=ST_LEAGUE_NAME(league);
   const alt=[...document.querySelectorAll('.cf-alt:checked')].map(c=>c.value).filter(p=>p!==pos);
   const club=$('cf-club').value.trim();
-  const def={id:F.id,kind:'player',name,pos,alt,ovr,nat,league,leagueN,club,clubId:'cx:'+stSlug(club),stats:[...document.querySelectorAll('.cf-st')].map(i=>stClamp(Math.round(+i.value||50),1,99)),rar:$('cf-rar').value,theme:$('cf-theme').value,noPack:$('cf-nopack').checked,img:F.img,crestImg:F.crestImg,frame:F.frame,hue:ST_ORIG_HUE(name),face:{sk:2,hr:1,st:1},ts:Date.now()};
+  const def={id:F.id,kind:'player',name,pos,alt,ovr,nat,league,leagueN,club,clubId:(stRegClubList().find(x=>x.n.toLowerCase()===club.toLowerCase())||{id:'cx:'+stSlug(club)}).id,stats:[...document.querySelectorAll('.cf-st')].map(i=>stClamp(Math.round(+i.value||50),1,99)),rar:$('cf-rar').value,theme:$('cf-theme').value,noPack:$('cf-nopack').checked,img:F.img,crestImg:F.crestImg,frame:F.frame,hue:ST_ORIG_HUE(name),face:{sk:2,hr:1,st:1},ts:Date.now()};
   Object.keys(def).forEach(k=>{if(def[k]===''||def[k]===undefined)delete def[k]});
   const r=await stCatSet('custom/'+def.id,def);if(!r.ok)return toast('Erro ao salvar: '+r.err+' (o tamanho das imagens pode estar grande)');
   ST.cat.custom[def.id]=def;stCatApply();ST.catT=Date.now();try{localStorage.setItem(ST_CAT_LS,JSON.stringify({cat:ST.cat,ann:ST.ann}))}catch(e){}
@@ -197,8 +202,8 @@ function stAdmMgrs(){
 }
 STA['adm-newmgr']=()=>stMgrForm(null);
 STA['adm-editmgr']=el=>stMgrForm(ST.cat.mgrs[el.dataset.k]);
-function stMgrForm(d){
-  const e=!!d;d=d||{name:'',nat:'BRA',league:ST_DB.leagues[0].id,special:false,theme:'ouro'};
+function stMgrForm(d,pre){
+  const e=!!d;d=d||Object.assign({name:'',nat:'BRA',league:ST_DB.leagues[0].id,special:false,theme:'ouro'},pre||{});
   ST_ADM.form={id:d.id||('cm'+stUid()),img:d.img||'',frame:d.frame||'',nflag:''};
   stModal(`<h3 class="t">${e?'Editar':'Novo'} técnico</h3><div class="st-form">
    <div class="fg"><label>Nome</label><input class="fc" id="mf-name" maxlength="28" value="${stAttr(d.name)}"></div>
@@ -245,9 +250,10 @@ function stAdmClubs(){
   if(uc==='loading')body='<div class="st-load"><div class="st-spin"></div></div>';
   else if(uc){
     const cards=Object.values(uc.cards||{}).sort((a,b)=>(b.ovr||0)-(a.ovr||0));
-    body=`<h4 class="st-h4">${esc(uc.name)} — ${stFmt(uc.coins||0)} 🪙 • ${cards.length} cartas</h4>
+    body=`<h4 class="st-h4">${esc(uc.name)} — ${stFmt(uc.coins||0)} 🪙 • ${cards.length} cartas ${stAdmBtn('adm-ucrefresh','x','↻ Atualizar','sec')}</h4>${uc.noClub?'<p class="st-fine">Este técnico ainda não tem clube na nuvem: o que você enviar chega quando ele abrir o StarsTeam.</p>':''}
+    <div class="st-card"><h4 class="st-h4">Moedas</h4><div class="row" style="gap:.5rem"><input class="fc" id="adm-coins" type="number" min="1" value="1000" style="max-width:160px"><button class="btn sm" data-act="adm-coinadd">➕ Adicionar</button><button class="btn sm sec" data-act="adm-coinrm">➖ Remover</button></div><small class="st-fine">Chega ao técnico na próxima vez que ele abrir/atualizar o StarsTeam. O saldo nunca fica negativo.</small></div>
     <div class="st-card"><h4 class="st-h4">Adicionar carta ao clube</h4><div class="row" style="gap:.5rem"><input class="fc" id="adm-addq" placeholder="Buscar jogador, técnico ou estádio…" data-in="adm-addq" style="flex:1"></div><div class="st-admlist" id="adm-addlist"><p class="st-fine">Digite para buscar.</p></div></div>
-    <div class="st-card"><h4 class="st-h4">Cartas do clube</h4><div class="st-admlist">${cards.map(c=>`<div class="st-admrow"><div><b>${esc(c.name)}</b><small>${c.kind==='player'?c.pos+' • OVR '+c.ovr:c.kind==='manager'?'Técnico':'Estádio'}</small></div>${stAdmBtn('adm-rmuc',c.id,'🗑 Remover','sec')}</div>`).join('')||'<p class="st-fine">Clube sem cartas.</p>'}</div></div>
+    <div class="st-card"><h4 class="st-h4">Cartas do clube</h4><input class="fc" placeholder="Filtrar cartas do clube…" data-in="adm-ucq" value="${stAttr(ST_ADM.ucq||'')}" style="max-width:260px"><div class="st-admlist">${cards.filter(c=>!ST_ADM.ucq||c.name.toLowerCase().includes(ST_ADM.ucq.toLowerCase())).slice(0,80).map(c=>`<div class="st-admrow"><div><b>${esc(c.name)}</b><small>${c.kind==='player'?c.pos+' • OVR '+c.ovr:c.kind==='manager'?'Técnico':'Estádio'}</small></div>${stAdmBtn('adm-rmuc',c.id,'🗑 Remover','sec')}</div>`).join('')||'<p class="st-fine">Clube sem cartas.</p>'}</div></div>
     <p class="st-fine">As alterações chegam ao técnico na próxima vez que ele abrir ou atualizar o StarsTeam.</p>`;
   }
   return `<div class="st-card"><h3 class="t">Clubes dos técnicos</h3><select class="fc" data-ch="adm-uc" style="max-width:300px"><option value="">Escolher técnico…</option>${users.map(u=>`<option value="${stAttr(u.k)}" ${ST_ADM.ucKey===u.k?'selected':''}>${esc(u.n)}</option>`).join('')}</select>${body}</div>`;
@@ -256,7 +262,8 @@ STA['adm-uc']=async el=>{
   const k=el.value;ST_ADM.ucKey=k;if(!k){ST_ADM.uc=null;return stAdmPane()}
   ST_ADM.uc='loading';stAdmPane();
   const r=await stGet('/clubs/'+k);
-  if(!r.ok||!r.data){ST_ADM.uc=null;stAdmPane();return toast('Este técnico ainda não tem clube na nuvem.')}
+  if(!r.ok){ST_ADM.uc=null;stAdmPane();return toast('Erro ao ler o clube: '+r.err)}
+  if(!r.data){ST_ADM.uc={name:(ST_ADM.list[k]||{}).name||k,coins:0,cards:{},noClub:true};ST_ADM.ucUser=ST_ADM.uc.name;stAdmPane();return}
   const c=r.data;c.cards=c.cards||{};ST_ADM.uc=c;ST_ADM.ucUser=(ST_ADM.list[k]||{}).name||c.user||k;stAdmPane();
 };
 function stAdmAddSearch(q){
@@ -298,3 +305,28 @@ STA['adm-annpub']=async()=>{
   ST_ADM.f.annImg='';ST_ADM.f.annCards=[];ST.catT=0;await stCatLoad(true);toast('Anúncio publicado!');stAdmPane();
 };
 STA['adm-anndel']=el=>stConfirm('Apagar este anúncio?',async()=>{await stDel('/ann/'+el.dataset.k);ST.catT=0;await stCatLoad(true);stAdmPane()},'Apagar');
+
+/* ---------- Moedas e cartas dos técnicos (via caixa de entrada) ---------- */
+async function stAdmCoins(sign){
+  const u=ST_ADM.ucUser,n=Math.round(+$('adm-coins').value||0);
+  if(!u||n<1)return toast('Informe uma quantia de moedas.');
+  const r=await stSendInbox(u,{type:'coins',delta:sign*n});
+  if(!r.ok)return toast('Erro: '+r.err);
+  ST_ADM.uc.coins=Math.max(0,(ST_ADM.uc.coins||0)+sign*n);stAdmPane();
+  toast((sign>0?'+':'-')+stFmt(n)+' moedas enviadas para '+u+'.');
+}
+STA['adm-coinadd']=()=>stAdmCoins(1);STA['adm-coinrm']=()=>stAdmCoins(-1);
+STA['adm-ucq']=el=>{ST_ADM.ucq=el.value;clearTimeout(ST_ADM.uqT);ST_ADM.uqT=setTimeout(()=>{const f=el.id;stAdmPane();const i=document.querySelector('[data-in="adm-ucq"]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},300)};
+STA['adm-ucrefresh']=()=>{const s=document.querySelector('[data-ch="adm-uc"]');if(s)STA['adm-uc'](s)};
+
+/* ---------- Times do jogo (aba Times) disponíveis para criar cartas e técnicos ---------- */
+function stAdmTeams(){
+  const L=stRegClubList(),lgs=stRegLeagueList();
+  return `<div class="st-card"><h3 class="t">Times e ligas do jogo (${L.length} times)</h3>
+  <p class="st-fine">Tudo que você cria nas abas Times e Atletas já está no StarsTeam: os atletas viram cartas base e os times, ligas e estádios podem ser usados para criar cartas e técnicos. Times privados não aparecem.</p>
+  <div class="st-chips">${lgs.map(l=>`<span>${esc(l.n)} <a data-act="adm-mgrlg" data-k="${stAttr(l.id)}" style="cursor:pointer" title="Novo técnico desta liga">👔</a></span>`).join('')||'<span>Nenhuma liga oficial</span>'}</div>
+  <div class="st-admlist">${L.map(c=>`<div class="st-admrow"><div style="display:flex;gap:.6rem;align-items:center">${c.logo?`<img src="${stAttr(c.logo)}" width="34" height="34" style="object-fit:contain" alt="">`:''}<div><b>${esc(c.n)}</b> <small>${esc(c.code)}</small><small>${esc(c.lgN||'Sem liga')} • ${c.athletes} atleta(s)${c.stadium?' • 🏟️ '+esc(c.stadium):''}</small></div></div>
+    <div class="row" style="gap:.3rem">${stAdmBtn('adm-teamcard',c.id,'➕ Carta','sec')}${c.lg?stAdmBtn('adm-mgrlg',c.lg,'👔 Técnico','sec'):''}</div></div>`).join('')||'<p class="st-fine">Nenhum time cadastrado.</p>'}</div></div>`;
+}
+STA['adm-teamcard']=el=>{const c=stRegClubList().find(x=>x.id===el.dataset.k);if(c)stCardForm(null,{club:c.n,league:c.lg||ST_DB.leagues[0].id})};
+STA['adm-mgrlg']=el=>stMgrForm(null,{league:el.dataset.k});

@@ -36,7 +36,7 @@ function paint(){[['home',M.h],['away',M.a]].forEach(([s,t])=>{const e=$('side-'
 function initTac(){
   M.tac={home:{atk:(M.h&&M.h.atk)||'eq',def:(M.h&&M.h.def)||'eq'},away:{atk:(M.a&&M.a.atk)||'eq',def:(M.a&&M.a.def)||'eq'}};
   M.tacT={home:-99,away:-99};
-  M.st={home:{shots:0,fouls:0,poss:0,on:0,corners:0,yc:0,rc:0,off:0},away:{shots:0,fouls:0,poss:0,on:0,corners:0,yc:0,rc:0,off:0}};
+  M.st={home:{shots:0,fouls:0,poss:0,on:0,corners:0,yc:0,rc:0,off:0,saves:0},away:{shots:0,fouls:0,poss:0,on:0,corners:0,yc:0,rc:0,off:0,saves:0}};
 }
 function newMatch(){
   const h=teamOf($('sel-home').value),a=teamOf($('sel-away').value),m=$('ctl').value;
@@ -133,7 +133,7 @@ function pauseBy(side){
   if(M.status!=='running')return;
   if(M.subs[side]<=0)return toast('Substituições esgotadas: não há mais paradas técnicas.');
   if(M.pauses[side]<=0)return toast('Limite de 3 paradas técnicas esgotado.');
-  M.pauses[side]--;M.hs.pauses++;stopTimer();M.status='paused';
+  M.pauses[side]--;M.hs.pauses++;M.pb=side;M.pbAt=Date.now();stopTimer();M.status='paused';
   tick(`⏱ Parada técnica pedida pelo ${side==='home'?M.h.name:M.a.name}`);btns();
 }
 function toggleHold(){
@@ -142,8 +142,6 @@ function toggleHold(){
   btns();
 }
 function tick(text){
-  if(M&&M.st&&M.lastSh&&/defende!/.test(text))M.st[M.lastSh].on++;
-  if(M&&M.st&&/Escanteio cobrado/.test(text))M.st[M.attack].corners++;
   $('ticker').insertAdjacentHTML('afterbegin',`<div class="tick"><span>⏱️</span><div>${esc(text)}</div></div>`);
 }
 
@@ -208,7 +206,7 @@ function ownGoalItem(sd,d){
   return{ms:4600,
     show(){
       if(sd==='home'){M.sh++;$('s-home').textContent=M.sh}else{M.sa++;$('s-away').textContent=M.sa}
-      M.hs.goals++;M.st[sd].on++;renderRoundBox();
+      M.hs.goals++;renderRoundBox();
       tick(`😱 GOL CONTRA! ${d.name} (${defT.name}) marca contra o próprio gol (${clock()})`);
       const b=banner({word:'GOOOL',team:defT,side:dside,photo:d.photo||PH,name:d.name,sub:`${defT.name.toUpperCase()} • ${clock()}`,score:1,hit:sd,ms:4600});
       b.show();
@@ -364,7 +362,7 @@ function cpuPairW(mode,out,inn,P){
   return w*Math.pow(inn.ovr/70,2);
 }
 function cpuMaybeSub(side){
-  if(M.ctl[side]||M.subs[side]<=0||M.inExtra||M.et||M.min<46)return;
+  if(M.ctl[side]||(M.rm&&M.rm[side])||M.subs[side]<=0||M.inExtra||M.et||M.min<46)return;
   if(M.min-M.lcs[side]<4)return;
   const P=cpuPers(side),st=M.st[side],mode=cpuSituation(side);
   const used=5-M.subs[side],fat=Math.max(0,M.min-50)/40;
@@ -466,7 +464,7 @@ function finishFT(){
   log(`Partida finalizada: ${m.h.name} ${m.sh} x ${m.sa} ${m.a.name}${m.et?' (após prorrogação)':''}`,'match');
   const ko=!!(m.ctx&&S&&S.phase==='ko');
   if(m.sh===m.sa&&(ko||m.etPen)){
-    openPK({mode:'shootout',title:'🥅 DISPUTA DE PÊNALTIS',teams:{home:m.h,away:m.a},ls:{home:m.lh,away:m.la},ctl:m.ctl,cb(r){
+    openPK({mode:'shootout',title:'🥅 DISPUTA DE PÊNALTIS',teams:{home:m.h,away:m.a},ls:{home:m.lh,away:m.la},ctl:m.ctl,rm:m.rm,cb(r){
       if(m.ctx)recordResult(m,r);else log(`Pênaltis: ${m.h.name} ${r.h} x ${r.a} ${m.a.name}`);
       lockSel(false);btns();
     }});
@@ -573,7 +571,7 @@ function chanceCore(c){
   }
   const gk=gkOf(c.def),gq=gk?gk.ovr:70;
   let sh,as=null,base=.2,pre='',kind='open';
-  if(r<.15){kind='corner';as=c.atk.on.find(p=>p.id===c.atkT.corner)||bestOf(c.atk,['CAM','CM','LM','RM','LW','RW']);sh=pick(c.atk,HW);base=.075;pre=`📐 Escanteio cobrado por ${as?as.name:'um jogador'}. `}
+  if(r<.15){kind='corner';as=c.atk.on.find(p=>p.id===c.atkT.corner)||bestOf(c.atk,['CAM','CM','LM','RM','LW','RW']);M.st[sd].corners++;sh=pick(c.atk,HW);base=.075;pre=`📐 Escanteio cobrado por ${as?as.name:'um jogador'}. `}
   else if(r<.25){kind='fk';sh=c.atk.on.find(p=>p.id===c.atkT.fk)||bestOf(c.atk,['CAM','ST','CM','LW','RW']);base=.06;pre='🎯 Falta perigosa! '}
   else{sh=pick(c.atk,POSW);as=pickAssist(c.atk,sh)}
   if(as===sh)as=null;
@@ -589,11 +587,11 @@ function chanceCore(c){
       tick(`📺 VAR revisa o lance de gol de ${who}...`);
       Q(banner({word:'VAR',neutral:1,cls:'var',sub:`Analisando o gol de ${who}`,ms:2600}));
       if(ok)Q(goalItem(sd,sh,false,true,ga,how));
-      else{tick(`❌ VAR anula o gol de ${who}! (${clock()})`);Q(banner({word:'ANULADO',neutral:1,cls:'annul',sub:'Decisão do VAR',ms:2200}))}
+      else{M.st[sd].on++;tick(`❌ VAR anula o gol de ${who}! (${clock()})`);Q(banner({word:'ANULADO',neutral:1,cls:'annul',sub:'Decisão do VAR',ms:2200}))}
     }else Q(goalItem(sd,sh,false,false,ga,how));
   }else{
     let msg;
-    if(o<conv+.3){setBall(home?92:8,50+rnd(-9,9));msg=`🧤 ${who} finaliza e ${gk?gk.name:'o goleiro'} defende!`}
+    if(o<conv+.3){M.st[sd].on++;M.st[home?'away':'home'].saves++;setBall(home?92:8,50+rnd(-9,9));msg=`🧤 ${who} finaliza e ${gk?gk.name:'o goleiro'} defende!`}
     else if(o<conv+.55){setBall(home?100:0,rnd(20,80));msg=`😬 ${who} chuta para fora!`}
     else{setBall(shx,shy);msg=`🛡️ ${who} tem a finalização bloqueada.`}
     if(kind==='corner'&&Math.random()<.5)setBall(home?98:2,Math.random()<.5?4:96);

@@ -40,8 +40,8 @@ function stFrameFor(c){
 }
 function stCardCrest(c){
   if(c.rar==='idolo')return '<span class="stc-star">★</span>';
-  if(c.src==='r'&&c.clubId&&String(c.clubId).startsWith('rt:')){const t=teamOf(String(c.clubId).slice(3));if(t&&t.logo)return `<img src="${esc(t.logo)}" alt="" onerror="this.style.display='none'">`}
   if(c.src==='c'){const d=ST.cat&&ST.cat.custom[c.pid];if(d&&d.crestImg)return `<img src="${stAttr(d.crestImg)}" alt="">`}
+  if(c.clubId&&String(c.clubId).startsWith('rt:')){const t=teamOf(String(c.clubId).slice(3));if(t&&t.logo&&t.logo!==PH)return `<img src="${esc(t.logo)}" alt="" onerror="this.style.display='none'">`}
   const cl=stClubById[c.clubId];return cl?stCrest(cl.crest,40):'';
 }
 const ST_RAR_TAG={totw:'TOTW',heroi:'HERÓI',idolo:'ÍDOLO',especial:'ESPECIAL'};

@@ -12,7 +12,7 @@ function stUserSpec(){
 function stGenAi(target,tag){
   const rng=stRng('ai:'+tag+':'+Date.now()+':'+Math.random());
   const forms=['4-3-3','4-4-2','4-2-3-1','4-1-2-1-2','3-5-2'].filter(f=>FORMS[f]),form=rng.pick(forms),F=FORMS[form];
-  const pool=target>=84?ST_DB.players:ST_DB.players.filter(p=>p.src==='g'||p.src==='c'),club=rng.pick(ST_DB.clubs),used=new Set();
+  const pool=target>=84?ST_DB.players:ST_DB.players.filter(p=>p.src==='g'||p.src==='c'||p.src==='r'),clubs=ST_DB.clubs.concat(typeof stRegClubsAsDb==='function'?stRegClubsAsDb():[]),club=rng.pick(clubs),used=new Set();
   const pickFor=(pos,tg)=>{
     let cand=pool.filter(p=>!used.has(p.id)&&(p.pos===pos||(p.alt||[]).includes(pos)));
     if(!cand.length)cand=pool.filter(p=>!used.has(p.id)&&((pos==='GK')===(p.pos==='GK')));
@@ -29,7 +29,7 @@ function stGenAi(target,tag){
   const pat=rng.pick(ST_KIT_PATTERNS)[0],h=club.hue;
   const best=xi.slice().sort((a,b)=>b.ovr-a.ovr)[0],pk=xi.slice().sort((a,b)=>b.stats[1]-a.stats[1])[0];
   return{user:null,bot:true,name:club.n,code:club.n.replace(/[^A-Za-zÀ-ú]/g,'').slice(0,3).toUpperCase().padEnd(3,'X'),crest:club.crest,
-    kits:{home:{pat,c1:`hsl(${h} 62% 40%)`,c2:'#ffffff'},away:{pat:'liso',c1:'#f1f1f1',c2:`hsl(${h} 62% 40%)`}},ball:'b1',formation:form,atk:rng.pick(['eq','posse','counter','pontas']),def:rng.pick(['eq','press','recuar','linha']),
+    kits:{home:{pat,c1:club.c1||`hsl(${h} 62% 40%)`,c2:club.c1?(club.c2||'#ffffff'):'#ffffff'},away:{pat:'liso',c1:'#f1f1f1',c2:club.c1||`hsl(${h} 62% 40%)`}},ball:'b1',formation:form,atk:rng.pick(['eq','posse','counter','pontas']),def:rng.pick(['eq','press','recuar','linha']),
     xi,bench,captain:best.id,pk:pk.id,mgr:null,stad:null,ovr:stTeamOvr(xi),chem,div:null,rating:null};
 }
 function stSpecFromPub(p){
@@ -83,11 +83,15 @@ function stStartMatch(cfg){
   $('ctl').value='home';$('et-mode').value=cfg.etMode||'none';
   onTeamChange();
   M.ctl={home:true,away:false};M.etMode=cfg.etMode||'none';M.ctx=null;M.lg=0;
-  M.stx={mode:cfg.mode,title:cfg.title,done:false,home,away,onEnd:cfg.onEnd};
+  M.stx={mode:cfg.mode,title:cfg.title,done:false,home,away,onEnd:cfg.onEnd,online:cfg.online||null};
+  if(cfg.online){if(cfg.online.mirror){M.ctl={home:false,away:true};M.rm={home:true};M.mirror=1}else M.rm={away:true};M.on=1;$('speed').value='800';$('speed').disabled=true;}
+  if(typeof stAdsApply==='function')stAdsApply(cfg.mode);
   c.pend={mode:cfg.mode,title:cfg.title,meta:cfg.meta||{},opp:{user:away.user||null,name:away.name,rating:away.rating},t:Date.now()};stSave();
+  if(cfg.online&&cfg.online.mirror)c.pend.opp={user:home.user||null,name:home.name,rating:home.rating};
   stBallOn(c.ball);
   lockSel(true);paint();layoutDots();buildTac();btns();renderStats();renderStadium();
   stGo('match',null);stVsIntro(home,away,cfg.title,()=>{});
+  if(cfg.online&&!cfg.online.mirror&&typeof stOnHostBegin==='function')stOnHostBegin(cfg.online);
 }
 function stBallOn(id){
   let s=$('st-ballstyle');if(!s){s=document.createElement('style');s.id='st-ballstyle';document.head.appendChild(s)}
@@ -99,7 +103,9 @@ function stMatchCleanup(){
   ST.tmp=null;
   const s=$('st-ballstyle');if(s)s.remove();
   if(M&&M.timer)stopTimer();
-  ST_LIVE=false;
+  ST_LIVE=false;$('speed').disabled=false;
+  if(typeof adUse==='function')adUse(null);
+  if(typeof stOnCleanup==='function')stOnCleanup();
   try{stRestoreGrid();fillSelects();M=null;onTeamChange();renderStadium()}catch(e){console.error(e)}
 }
 /* gancho de fim de partida */
@@ -114,7 +120,7 @@ function stMatchCleanup(){
   };
   const opk=openPK;
   openPK=function(cfg){
-    if(M&&M.stx&&!M.stx.done){const cb=cfg.cb,m=M;cfg.cb=r=>{try{cb(r)}catch(e){console.error(e)}setTimeout(()=>stMatchEnd(m,r),800)}}
+    if(cfg&&cfg.mode==='shootout'&&M&&M.stx&&!M.stx.done){const cb=cfg.cb,m=M;cfg.cb=r=>{try{cb(r)}catch(e){console.error(e)}setTimeout(()=>stMatchEnd(m,r),800)}}
     return opk.call(this,cfg);
   };
   const gt=goTab;
@@ -124,15 +130,17 @@ function stMatchCleanup(){
   };
 })();
 
+const mode_notify=p=>p.mode!=='online';
 function stMatchEnd(m,pk,forced){
   if(!m||!m.stx||m.stx.done)return;
   m.stx.done=true;if(m.timer)stopTimer();
   const c=ST.club;let gf=m.sh,ga=m.sa,res=gf>ga?'W':gf<ga?'L':'D';
-  if(pk)res=pk.winner==='home'?'W':'L';
-  if(forced){gf=0;ga=3;res='L'}
+  if(res==='D'&&pk&&(pk.winner==='home'||pk.winner==='away'))res=pk.winner==='home'?'W':'L';
+  if(forced===true){gf=0;ga=3;res='L'}else if(forced==='win'){gf=3;ga=0;res='W'}
   const p=c.pend||{mode:m.stx.mode,title:m.stx.title,meta:{},opp:{}};c.pend=null;
-  const out=stApplyResult(p,res,gf,ga,{pk,forfeit:!!forced});
-  if(p.opp&&p.opp.user&&!forced)stSendInbox(p.opp.user,{type:'duel',from:currentUser,mode:p.title,gf:ga,ga:gf}).catch&&0;
+  const out=stApplyResult(p,res,gf,ga,{pk,forfeit:!!forced,won:forced==='win'});
+  if(typeof stOnHostFinal==='function'&&m.stx.online)stOnHostFinal(m,pk,forced);
+  if(p.opp&&p.opp.user&&!forced&&mode_notify(p))stSendInbox(p.opp.user,{type:'duel',from:currentUser,mode:p.title,gf:ga,ga:gf});
   stSave({pub:true});stTopRefresh();
   stResultModal(out,m);
 }
@@ -178,8 +186,14 @@ function stApplyResult(p,res,gf,ga,x){
       d.stage=d.over?'done':'play';
     }
     out.next='draft';
+  }else if(mode==='online'){
+    const o=c.on,orat=(p.opp&&p.opp.rating)||1000,E=1/(1+Math.pow(10,(orat-o.rating)/400)),S=res==='W'?1:res==='D'?.5:0,d=Math.round(24*(S-E));
+    o.rating=Math.max(0,o.rating+d);o[res==='W'?'w':res==='D'?'d':'l']++;
+    lines.push(`Rating online ${d>=0?'+':''}${d} (agora ${Math.round(o.rating)})`);out.next='online';
   }else if(mode==='friend'){out.next='comm'}
-  if(x.forfeit)lines.unshift('Partida abandonada: derrota por 0 x 3.');
+  if(x.pk&&x.pk.winner)lines.unshift(`Pênaltis: ${x.pk.h} x ${x.pk.a}`);
+  if(x.won)lines.unshift('O adversário abandonou a partida: vitória por 3 x 0.');
+  else if(x.forfeit)lines.unshift('Partida abandonada: derrota por 0 x 3.');
   stLog(`${p.title}: ${res==='W'?'vitória':res==='D'?'empate':'derrota'} ${gf} x ${ga}`);
   return out;
 }
@@ -211,11 +225,12 @@ STV.play=()=>{
     ['champ','🏆','StarsChampions',champ?(c.ch.active?`${c.ch.played}/${ST_CH_GAMES} jogos • ${c.ch.pts} pts`:'Fim de semana aberto'):'Abre no fim de semana','Classifique-se e jogue 20 partidas. Vitória +4, derrota +1.'],
     ['draft','🎲','StarsDraft',c.draft&&c.draft.stage!=='done'?'Em andamento':'Entrada: '+stFmt(ST_DRAFT_FEE)+' 🪙','Monte um time do zero e vá até a 4ª vitória no mata-mata.'],
     ['sb','⚔️','Squad Battles',`${c.sb.pts} pts na semana`,'Enfrente a CPU em 6 níveis de dificuldade.'],
-    ['friends','👥','Amistoso com amigos','Sem prêmios','Enfrente o elenco publicado de um amigo.']
+    ['online','🌐','Online',`Rating ${Math.round((c.on||{}).rating||1000)}`,'Jogue ao vivo contra outro técnico.'],
+    ['friends','👥','Amistoso com amigos','Sem prêmios','Enfrente o elenco publicado de um amigo (CPU).']
   ];
   if(!a.full)return `<div class="st-card"><h3 class="t">Complete o seu elenco</h3><p>Você precisa dos 11 titulares para jogar.</p><button class="btn" data-act="go" data-v="squad">Ir ao Elenco</button></div>`;
   return `<h2 class="t">Jogar</h2><div class="st-modes">${tiles.map(([k,ic,n,s,d],i)=>`<button class="st-mode tilt" style="--i:${i}" data-act="go" data-v="${k}"><span>${ic}</span><b>${n}</b><em>${esc(s)}</em><small>${esc(d)}</small>${k==='champ'&&pend?'<i class="st-pill">prêmio!</i>':''}</button>`).join('')}</div>
-  <p class="st-fine">Online com amigos: a partida contra um amigo é assíncrona. O time dele é controlado pela CPU usando o elenco e a tática que ele deixou publicados.</p>`;
+  <p class="st-fine">Online: partida ao vivo contra outro técnico. No Amistoso, o time do amigo é controlado pela CPU com o elenco que ele publicou.</p>`;
 };
 
 /* ---------- Squad Battles ---------- */
@@ -270,7 +285,7 @@ STA.chplay=()=>{
 const wkSafe=()=>stWeekId();
 STA.chpo=()=>{
   if(!stReady())return;const c=ST.club;if(c.coins<2000)return toast('Moedas insuficientes.');
-  stConfirm('Pagar 2.000 🪙 e disputar o playoff? Se vencer, você entra no Champions.',()=>{c.coins-=2000;stSave();stStartMatch({mode:'champ_po',title:'Playoff do Champions',home:stUserSpec(),away:stGenAi(82,'po'),meta:{}})},'Disputar');
+  stConfirm('Pagar 2.000 🪙 e disputar o playoff? Se vencer, você entra no Champions.',()=>{c.coins-=2000;stSave();stStartMatch({mode:'champ_po',title:'Playoff do Champions',home:stUserSpec(),away:stGenAi(82,'po'),etMode:'et_pen',meta:{}})},'Disputar');
 };
 STA.chclaim=()=>{const c=ST.club,ch=c.ch;if(ch.claimed||ch.played<ST_CH_GAMES)return;ch.claimed=true;const t=stChampTier(ch.pts);stGrant(t);stLog('Resgatou prêmio do Champions');stSave();toast('🎁 '+stRewardText(t));stTopRefresh();stGo('champ',null,true)};
 STA.chclaimp=el=>{const c=ST.club,p=c.chPending[+el.dataset.i];if(!p)return;c.chPending.splice(+el.dataset.i,1);const t=stChampTier(p.pts);stGrant(t);stSave();toast('🎁 '+stRewardText(t));stTopRefresh();stGo('champ',null,true)};
