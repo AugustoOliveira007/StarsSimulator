@@ -35,6 +35,15 @@ function stRegClubsAsDb(){
   });
 }
 
+/* foto do atleta (a carta usa a imagem cadastrada em Atletas; sem foto, avatar gerado) */
+const stRegPhotoOf=p=>p&&p.photo&&p.photo!==PH?p.photo:'';
+/* acha o atleta de uma carta: pelo id e, se o cadastro foi refeito, pelo nome + time */
+function stRegPlayerOf(c){
+  if(!c||typeof players==='undefined')return null;
+  let p=c.rp?players.find(x=>x.id===c.rp):null;
+  if(!p&&c.name){const tn=c.club;p=players.find(x=>x.name===c.name&&!String(x.teamId).startsWith('st:')&&(!tn||(teamOf(x.teamId)||{}).name===tn))}
+  return p||null;
+}
 /* cartas base dos atletas cadastrados */
 function stRegCards(){
   const out=[],tm={};
@@ -49,7 +58,7 @@ function stRegCards(){
     const stats=prof.map(o=>stClamp(Math.round(ovr+o+pr.gauss()*3.2),18,99));
     const rare=pr()<(ovr>=75?.34:ovr>=65?.26:.2);
     out.push({id:'r'+p.id,rp:p.id,name:p.name,pos,alt,ovr,nat:ST_NATIONS[p.nat]?p.nat:'',league:lg?lg.id:'',leagueN:lg?lg.n:'',club:t.name,clubId:'rt:'+t.id,
-      stats,rar:rare?'raro':'comum',face:{sk:pr.int(0,5),hr:pr.int(0,6),st:pr.int(0,5)},hue:stHash('st'+t.id)%360,src:'r',noPack:!useReg});
+      stats,img:stRegPhotoOf(p),rar:rare?'raro':'comum',face:{sk:pr.int(0,5),hr:pr.int(0,6),st:pr.int(0,5)},hue:stHash('st'+t.id)%360,src:'r',noPack:!useReg});
   });
   return out;
 }
@@ -57,8 +66,8 @@ function stRegCards(){
 /* assinatura do que importa: se mudou, o catálogo do StarsTeam é reconstruído */
 function stRegSig(){
   const useReg=!(typeof ST!=='undefined'&&ST.cfg&&ST.cfg.useReg===false);
-  const t=stRegTeams().map(x=>[x.id,x.name,x.code,x.leagueId||'',x.color,x.color2,x.stadium||'',x.fans||0,x.logo?x.logo.length:0,x.stadiumImg?x.stadiumImg.length:0].join('~')).join('|');
-  const p=(typeof players!=='undefined'?players:[]).map(x=>[x.id,x.name,x.teamId,x.ovr,x.pos,x.photo?x.photo.length:0].join('~')).join('|');
+  const t=stRegTeams().map(x=>[x.id,x.name,x.code,x.leagueId||'',x.color,x.color2,x.stadium||'',x.fans||0,stHash(x.logo||''),stHash(x.stadiumImg||'')].join('~')).join('|');
+  const p=(typeof players!=='undefined'?players:[]).map(x=>[x.id,x.name,x.teamId,x.ovr,x.pos,stHash(x.photo||'')].join('~')).join('|');
   const l=stRegLeagueList().map(x=>x.id+'~'+x.n).join('|');
   return String(stHash(t+'#'+p+'#'+l+'#'+useReg))+':'+(typeof players!=='undefined'?players.length:0)+':'+stRegTeams().length;
 }

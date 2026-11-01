@@ -157,7 +157,11 @@ function stMakeStadium(s){return{id:stUid(),pid:s.id,kind:'stadium',name:s.name,
 const stIsPlayer=c=>c&&c.kind==='player';
 function stCardPhoto(c){
   if(c&&c.src==='c'){const d=ST.cat&&ST.cat.custom[c.pid];if(d&&d.img)return d.img}
-  if(c&&c.src==='r'&&c.rp){const p=players.find(x=>x.id===c.rp);if(p&&p.photo&&p.photo!==PH)return p.photo}
+  if(c&&(c.src==='r'||c.rp)){
+    const p=typeof stRegPlayerOf==='function'?stRegPlayerOf(c):null;
+    if(p&&p.photo&&p.photo!==PH)return p.photo;
+    const b=ST_DB.byId[c.pid]||ST_DB.byId['r'+c.rp];if(b&&b.img)return b.img;
+  }
   return stAvatarURL(c.face,c.hue);
 }
 const stCardTier=c=>c.kind==='player'?stTier(c.ovr):'ouro';

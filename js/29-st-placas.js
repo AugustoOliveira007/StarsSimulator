@@ -1,8 +1,8 @@
 /* ===================== STARSTEAM — PLACAS DE PUBLICIDADE POR MODO =====================
-   Cada modo (Rivals, Champions, Draft, Squad Battles, Amistoso, Online) pode ter as suas placas,
+   Cada modo (Rivals, Champions, Draft, Squad Duels, Amistoso) pode ter as suas placas,
    editadas no StarsTeam Admin. Sem placas próprias, o modo usa as placas padrão (⚙️).
    Nuvem: /stars_st/<código>/ads/<modo> = {list:[{src,fit,zoom}], sec} */
-const ST_AD_MODES=[['rivals','StarsRivals'],['champ','StarsChampions'],['draft','StarsDraft'],['sb','Squad Battles'],['friend','Amistoso'],['online','Online']];
+const ST_AD_MODES=[['rivals','StarsRivals'],['champ','StarsChampions'],['draft','StarsDraft'],['sb','Squad Duels'],['friend','Amistoso']];
 const stAdMode=m=>m==='champ_po'?'champ':m;
 ST.adsC=(()=>{try{return JSON.parse(localStorage.getItem('stars_st_ads_v1'))||{}}catch(e){return{}}})();
 ST.adsT={};ST.adMode=null;

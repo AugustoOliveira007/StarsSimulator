@@ -337,7 +337,7 @@ async function stResolvePending(){
 
 /* ---------- Hub ---------- */
 const ST_TILES=[
-  {k:'play',ic:'⚔️',n:'Jogar',d:'Rivals, Champions, Draft, Squad Battles e amistosos'},
+  {k:'play',ic:'⚔️',n:'Jogar',d:'Rivals, Champions, Draft, Squad Duels e amistosos'},
   {k:'squad',ic:'🧩',n:'Elenco',d:'Formação, tática e entrosamento'},
   {k:'store',ic:'🎁',n:'Loja',d:'Pacotes e probabilidades'},
   {k:'market',ic:'💱',n:'Mercado',d:'Leilões entre amigos'},

@@ -6,7 +6,8 @@
      lobby/<sala>   anúncio público da sala       specs/<sala>/host|guest   elencos
      rooms/<sala>   estado e pedidos de entrada   frames/<sala>             quadro atual da partida
      cmds/<sala>    comandos do convidado         clock/<chave>             relógio do servidor        */
-const ST_ON={role:null,rid:null,room:null,spec:{},evs:[],evn:0,lastEv:0,seen:{},frameSig:'',pubBusy:false,offset:null,gq:[],gqBusy:false,lastFrame:null,staleAt:0,ghbVal:null,ghbAt:0};
+const ST_ON_MODES={rivals:{n:'StarsRivals',view:'rivals'},champ:{n:'StarsChampions',view:'champ'},draft:{n:'StarsDraft',view:'draft'},friend:{n:'Amistoso',view:'friends'}};
+const ST_ON={mode:'rivals',role:null,rid:null,room:null,spec:{},evs:[],evn:0,lastEv:0,seen:{},frameSig:'',pubBusy:false,offset:null,gq:[],gqBusy:false,lastFrame:null,staleAt:0,ghbVal:null,ghbAt:0};
 const stOnP=(...a)=>'/online/'+a.join('/');
 const stOnDead=()=>!ST_ON.role||!M||!M.stx||M.stx.done;
 
@@ -21,7 +22,32 @@ function stOnNorm(sp){
   sp.mgr=sp.mgr&&sp.mgr.id?sp.mgr:null;sp.stad=sp.stad&&sp.stad.name?sp.stad:null;
   return sp;
 }
-function stOnMySpec(){const sp=JSON.parse(JSON.stringify(stUserSpec()));sp.rating=Math.round((ST.club.on||{}).rating||1000);sp.user=currentUser;return sp}
+/* o online é uma opção de cada modo: o elenco, as regras e as recompensas são os do próprio modo */
+function stOnMySpec(mode){
+  mode=mode||ST_ON.mode;const c=ST.club;
+  const sp=JSON.parse(JSON.stringify(mode==='draft'&&c.draft?stDraftSpec():stUserSpec()));
+  sp.rating=Math.round(mode==='rivals'?c.rv.rating:1000);sp.user=currentUser;return sp;
+}
+/* devolve o motivo de o modo não poder ser jogado agora ('' = pode) */
+function stOnModeOk(mode){
+  const c=ST.club,a=stActiveInfo();
+  if(!ST_ON_MODES[mode])return 'Modo inválido.';
+  if(mode==='draft'){const d=c.draft;if(!d||d.stage!=='play'||d.over)return 'Monte o seu time do Draft e chegue à fase de jogos para jogar online.';return ''}
+  if(!a.full)return 'Complete o seu elenco (11 titulares).';
+  if(mode==='champ'){
+    if(!stChampOpen())return 'O Champions está fechado.';
+    if(!(c.ch.qual||c.rv.wins>=ST_RIVALS_QUALIFY_WINS))return 'Você ainda não está classificado para o Champions.';
+    if(c.ch.played>=ST_CH_GAMES)return 'Você já completou os jogos do Champions.';
+  }
+  return '';
+}
+/* ajustes do modo antes de começar a partida (iguais aos do jogo offline) */
+function stOnPrep(mode){
+  const c=ST.club;
+  if(mode==='champ'&&!c.ch.active){c.ch.active=true;c.ch.wk=stWeekId()}
+  const d=c.draft;
+  return{title:ST_ON_MODES[mode].n+' • online'+(mode==='champ'?' • jogo '+(c.ch.played+1):mode==='rivals'?' • '+ST_DIV_NAME(c.rv.div):mode==='draft'&&d?' • rodada '+(d.wins+1):''),meta:mode==='draft'&&d?{round:d.wins}:{}};
+}
 async function stOnClock(){
   if(ST_ON.offset!=null&&Date.now()-ST_ON.offT<600000)return ST_ON.offset;
   const k=stKey(currentUser),a=Date.now(),w=await stPut(stOnP('clock',k),SV);
@@ -35,9 +61,8 @@ const stOnSend=c=>{if(ST_ON.rid)return stPost(stOnP('cmds',ST_ON.rid),{...c,from
 /* ===================== LOBBY ===================== */
 ST_ON.list=[];
 STV.online=()=>{
-  const c=ST.club,r=ST_ON.room,o=c.on||{};
-  const head=`<div class="row" style="justify-content:space-between"><h2 class="t">Online</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div>
-  <div class="st-card st-rivhead"><div><small>Rating online</small><b>${Math.round(o.rating||1000)}</b></div><div><small>Vitórias</small><b>${o.w||0}</b></div><div><small>Empates</small><b>${o.d||0}</b></div><div><small>Derrotas</small><b>${o.l||0}</b></div></div>`;
+  const c=ST.club,r=ST_ON.room,md=ST_ON_MODES[ST_ON.mode]||ST_ON_MODES.rivals,bad=stOnModeOk(ST_ON.mode);
+  const head=`<div class="row" style="justify-content:space-between"><h2 class="t">🌐 ${md.n} online</h2><button class="btn sec sm" data-act="go" data-v="${md.view}">‹ Voltar</button></div>`;
   if(r){
     const me=r.role==='host',opp=me?r.guestName:r.host;
     let body='';
@@ -48,10 +73,10 @@ STV.online=()=>{
     else body=`<p>${esc(r.msg||'Sala encerrada.')}</p><button class="btn" data-act="onleave">Voltar ao lobby</button>`;
     return head+`<div class="st-card" style="text-align:center">${body}</div>`;
   }
-  return head+`<div class="st-card"><p>Jogue ao vivo contra outro técnico do beta. Quem cria a sala roda a partida; o adversário comanda o próprio time em tempo real (tática, paradas técnicas, substituições e pênaltis). Não há prêmios em moedas: vale rating e estatísticas.</p>
-    <div class="row" style="gap:.6rem;flex-wrap:wrap"><button class="btn" data-act="onquick">⚡ Partida rápida</button>
-    <select id="on-et" class="fc" style="width:auto"><option value="none">Empate: termina empatado</option><option value="et_pen">Empate: prorrogação + pênaltis</option></select>
-    <button class="btn sec" data-act="oncreate">➕ Criar sala</button><button class="btn sec" data-act="onrefresh">↻ Atualizar</button></div></div>
+  return head+`<div class="st-card"><p>Partida de ${md.n} ao vivo contra outro técnico. Valem as mesmas regras, pontuação e recompensas do modo. Quem cria a sala roda a partida; o adversário comanda o próprio time em tempo real (tática, paradas técnicas, substituições e pênaltis).${ST_ON.mode==='draft'?' No Draft, o online rende bônus no prêmio e o empate sempre vai para prorrogação e pênaltis.':''}</p>${bad?`<p class="st-warn">⚠️ ${esc(bad)}</p>`:''}
+    <div class="row" style="gap:.6rem;flex-wrap:wrap"><button class="btn" data-act="onquick" ${bad?'disabled':''}>⚡ Partida rápida</button>
+    ${ST_ON.mode==='draft'?'':`<select id="on-et" class="fc" style="width:auto"><option value="none">Empate: termina empatado</option><option value="et_pen">Empate: prorrogação + pênaltis</option></select>`}
+    <button class="btn sec" data-act="oncreate" ${bad?'disabled':''}>➕ Criar sala</button><button class="btn sec" data-act="onrefresh">↻ Atualizar</button></div></div>
     <div class="st-card"><h3 class="t">Salas abertas</h3><div id="st-onlist"><div class="st-load"><div class="st-spin"></div></div></div></div>`;
 };
 STP.online=async()=>{if(!ST_ON.room)await stOnRefreshList()};
@@ -64,24 +89,29 @@ async function stOnRefreshList(){
     if(!l||!l.host)return;
     const age=now-(+l.hb||0);
     if(age>150000){stOnDrop(rid);return}
-    if(age>40000||l.host===currentUser)return;
+    if(age>40000||l.host===currentUser||!stOnSameLobby(l))return;
     rows.push({rid,...l});
   });
   rows.sort((a,b)=>Math.abs((a.rating||1000)-ST.club.on.rating)-Math.abs((b.rating||1000)-ST.club.on.rating));
   ST_ON.list=rows;
   box.innerHTML=rows.length?`<table class="st-table"><tr><th>Clube</th><th>Técnico</th><th>OVR</th><th>ENT</th><th>Rating</th><th>Empate</th><th></th></tr>${rows.map(l=>`<tr><td>${esc(l.club||'')}</td><td>${esc(l.host)}</td><td>${l.ovr||'–'}</td><td>${l.chem||'–'}</td><td>${l.rating||'–'}</td><td>${l.et==='et_pen'?'Prorrog.+pên.':'Empate vale'}</td><td><button class="btn sm" data-act="onjoin" data-r="${stAttr(l.rid)}">Entrar</button></td></tr>`).join('')}</table>`:'<p class="st-fine">Nenhuma sala aberta agora. Crie uma ou use a partida rápida.</p>';
 }
+/* só aparecem salas do mesmo modo (e, no Draft, da mesma rodada) */
+const stOnSameLobby=l=>l.mode===ST_ON.mode&&(ST_ON.mode!=='draft'||(+l.round||0)===((ST.club.draft||{}).wins||0));
 function stOnDrop(rid){['lobby','rooms','specs','frames','cmds'].forEach(k=>stDel(stOnP(k,rid)))}
 STA.onrefresh=()=>stOnRefreshList();
 
 /* ---------- criar sala (anfitrião) ---------- */
 async function stOnCreate(et){
   if(!stReady())return;
-  const c=ST.club,rid=stUid(),sp=stOnMySpec();
+  const bad=stOnModeOk(ST_ON.mode);if(bad)return toast(bad);
+  const c=ST.club,rid=stUid(),mode=ST_ON.mode,sp=stOnMySpec(mode);
+  et=mode==='draft'?'et_pen':et;
   const w=await stPut(stOnP('specs',rid,'host'),sp);if(!w.ok)return toast('Erro ao criar a sala: '+w.err);
-  await stPut(stOnP('rooms',rid),{id:rid,host:currentUser,status:'open',et:et||'none',created:SV});
-  await stPut(stOnP('lobby',rid),{host:currentUser,club:c.name,ovr:sp.ovr,chem:sp.chem,rating:sp.rating,et:et||'none',hb:SV});
-  ST_ON.room={rid,role:'host',state:'open',et:et||'none',host:currentUser};ST_ON.rid=rid;ST_ON.spec={me:sp};
+  const round=mode==='draft'?c.draft.wins:0;
+  await stPut(stOnP('rooms',rid),{id:rid,host:currentUser,status:'open',et:et||'none',mode,round,created:SV});
+  await stPut(stOnP('lobby',rid),{host:currentUser,club:c.name,ovr:sp.ovr,chem:sp.chem,rating:sp.rating,et:et||'none',mode,round,hb:SV});
+  ST_ON.room={rid,role:'host',state:'open',et:et||'none',host:currentUser,mode};ST_ON.rid=rid;ST_ON.spec={me:sp};
   clearInterval(ST_ON.hostT);ST_ON.hostT=setInterval(stOnHostLoop,2200);
   stGo('online',null,true);
 }
@@ -108,7 +138,7 @@ async function stOnHostLoop(){
       if(rm.ok&&rm.data&&rm.data.status==='guestleft'){
         r.state='open';r.guestName='';delete ST_ON.spec.opp;
         await stPatch(stOnP('rooms',r.rid),{status:'open',guest:''});
-        await stPut(stOnP('lobby',r.rid),{host:currentUser,club:ST.club.name,ovr:ST_ON.spec.me.ovr,chem:ST_ON.spec.me.chem,rating:ST_ON.spec.me.rating,et:r.et,hb:SV});
+        await stPut(stOnP('lobby',r.rid),{host:currentUser,club:ST.club.name,ovr:ST_ON.spec.me.ovr,chem:ST_ON.spec.me.chem,rating:ST_ON.spec.me.rating,et:r.et,mode:r.mode,round:r.round||0,hb:SV});
         toast('O adversário saiu da sala.');if(stView('online'))stGo('online',null,true);
       }
     }
@@ -119,13 +149,14 @@ async function stOnHostLoop(){
 async function stOnJoin(rid){
   if(!stReady())return false;
   const rm=await stGet(stOnP('rooms',rid));
-  if(!rm.ok||!rm.data||rm.data.status!=='open'||rm.data.host===currentUser){toast('Esta sala não está mais disponível.');return false}
+  const bad=stOnModeOk(ST_ON.mode);if(bad){toast(bad);return false}
+  if(!rm.ok||!rm.data||rm.data.status!=='open'||rm.data.host===currentUser||rm.data.mode!==ST_ON.mode){toast('Esta sala não está mais disponível.');return false}
   const hs=await stGet(stOnP('specs',rid,'host'));if(!hs.ok||!hs.data){toast('Sala indisponível.');return false}
-  const sp=stOnMySpec();
+  const sp=stOnMySpec(ST_ON.mode);
   const w=await stPut(stOnP('specs',rid,'guest'),sp);if(!w.ok){toast('Erro: '+w.err);return false}
   await stPost(stOnP('rooms',rid,'joins'),{user:currentUser,ts:SV});
   ST_ON.rid=rid;ST_ON.spec={me:sp,opp:stOnNorm(hs.data)};
-  ST_ON.room={rid,role:'guest',state:'joining',host:rm.data.host,et:rm.data.et||'none',t0:Date.now()};
+  ST_ON.room={rid,role:'guest',state:'joining',host:rm.data.host,et:rm.data.et||'none',mode:rm.data.mode,t0:Date.now()};
   clearInterval(ST_ON.guestT);ST_ON.guestT=setInterval(stOnGuestLoop,1500);
   stGo('online',null,true);return true;
 }
@@ -156,7 +187,7 @@ async function stOnQuick(){
 }
 async function stOnRefreshListQuiet(){
   const [off,r]=await Promise.all([stOnClock(),stGet(stOnP('lobby'))]),now=Date.now()+off,rows=[];
-  Object.entries(r.data||{}).forEach(([rid,l])=>{if(l&&l.host&&l.host!==currentUser&&now-(+l.hb||0)<=40000)rows.push({rid,...l})});
+  Object.entries(r.data||{}).forEach(([rid,l])=>{if(l&&l.host&&l.host!==currentUser&&now-(+l.hb||0)<=40000&&stOnSameLobby(l))rows.push({rid,...l})});
   rows.sort((a,b)=>Math.abs((a.rating||1000)-ST.club.on.rating)-Math.abs((b.rating||1000)-ST.club.on.rating));ST_ON.list=rows;
 }
 STA.onquick=()=>stOnQuick();
@@ -168,7 +199,10 @@ STA.onleave=async()=>{
   }
   ST_ON.room=null;ST_ON.rid=null;ST_ON.spec={};stGo('online',null,true);
 };
+STA.onopen=el=>{if(ST_ON.room&&ST_ON.room.mode!==el.dataset.m)return toast('Você já está numa sala de '+ST_ON_MODES[ST_ON.room.mode].n+'. Saia dela primeiro.');ST_ON.mode=el.dataset.m;stGo('online',null)};
 STA.oninvite=async el=>{
+  if(ST_ON.room&&ST_ON.room.mode!=='friend')return toast('Saia da sala atual antes de convidar para um amistoso.');
+  ST_ON.mode='friend';
   if(!ST_ON.room)await stOnCreate('none');
   const r=await stSendInbox(el.dataset.u,{type:'invite',from:currentUser});
   toast(r.ok?'Convite enviado a '+el.dataset.u+'. Aguarde na sala.':'Erro: '+r.err);stGo('online',null,true);
@@ -177,8 +211,9 @@ STA.onstart=async()=>{
   const r=ST_ON.room;if(!r||r.role!=='host'||r.state!=='ready'||!ST_ON.spec.opp)return;
   const w=await stPatch(stOnP('rooms',r.rid),{status:'playing'});if(!w.ok)return toast('Erro: '+w.err);
   clearInterval(ST_ON.hostT);
-  const me=stOnMySpec(),opp=ST_ON.spec.opp;
-  stStartMatch({mode:'online',title:'Online • '+r.guestName,home:me,away:opp,etMode:r.et,meta:{},online:{rid:r.rid}});
+  const bad=stOnModeOk(r.mode);if(bad)return toast(bad);
+  const pr=stOnPrep(r.mode);
+  stStartMatch({mode:r.mode,title:pr.title+' vs '+r.guestName,home:ST_ON.spec.me,away:ST_ON.spec.opp,etMode:r.et,meta:pr.meta,online:{rid:r.rid}});
 };
 
 /* ===================== ANFITRIÃO: roda o motor e publica quadros ===================== */
@@ -382,9 +417,9 @@ function stOnCleanup(){
 async function stOnGuestBegin(){
   const r=ST_ON.room;if(!r)return;
   const hs=await stGet(stOnP('specs',r.rid,'host'));
-  const home=stOnNorm(hs.data||ST_ON.spec.opp),away=stOnMySpec();
+  const home=stOnNorm(hs.data||ST_ON.spec.opp),away=ST_ON.spec.me,pr=stOnPrep(r.mode);
   Object.assign(ST_ON,{role:'guest',rid:r.rid,lastEv:0,gq:[],gqBusy:false,lastFrame:null,staleAt:Date.now(),frameTs:0,readyMe:false,fin:false});
-  stStartMatch({mode:'online',title:'Online • '+r.host,home,away,etMode:r.et,meta:{},online:{rid:r.rid,mirror:true}});
+  stStartMatch({mode:r.mode,title:pr.title+' vs '+r.host,home,away,etMode:r.et,meta:pr.meta,online:{rid:r.rid,mirror:true}});
   M.etMode=r.et;
   /* os ids dos jogadores são os mesmos do anfitrião: stp:<lado>:<id da carta> */
   ST_ON.pmap={};players.forEach(p=>{ST_ON.pmap[p.id]=p});
@@ -462,7 +497,7 @@ function stOnGuestEnd(res){
     const m=M;if(!m||m.stx.done)return;m.stx.done=true;
     const c=ST.club,gf=res.sa,ga=res.sh;let r=gf>ga?'W':gf<ga?'L':'D';
     if(r==='D'&&res.pkw)r=res.pkw==='away'?'W':'L';
-    const p=c.pend||{mode:'online',title:m.stx.title,meta:{},opp:{}};c.pend=null;
+    const p=c.pend||{mode:m.stx.mode,title:m.stx.title,online:true,meta:{},opp:{}};c.pend=null;
     const out=stApplyResult(p,r,gf,ga,{pk:res.pkw?{winner:res.pkw,h:res.pa,a:res.ph}:null,forfeit:res.wo==='guest',won:res.wo==='host'});
     stSave({pub:true});stTopRefresh();
     stResultModal(out,{h:m.a,a:m.h});

@@ -86,7 +86,7 @@ function stStartMatch(cfg){
   M.stx={mode:cfg.mode,title:cfg.title,done:false,home,away,onEnd:cfg.onEnd,online:cfg.online||null};
   if(cfg.online){if(cfg.online.mirror){M.ctl={home:false,away:true};M.rm={home:true};M.mirror=1}else M.rm={away:true};M.on=1;$('speed').value='800';$('speed').disabled=true;}
   if(typeof stAdsApply==='function')stAdsApply(cfg.mode);
-  c.pend={mode:cfg.mode,title:cfg.title,meta:cfg.meta||{},opp:{user:away.user||null,name:away.name,rating:away.rating},t:Date.now()};stSave();
+  c.pend={mode:cfg.mode,title:cfg.title,online:!!cfg.online,meta:cfg.meta||{},opp:{user:away.user||null,name:away.name,rating:away.rating},t:Date.now()};stSave();
   if(cfg.online&&cfg.online.mirror)c.pend.opp={user:home.user||null,name:home.name,rating:home.rating};
   stBallOn(c.ball);
   lockSel(true);paint();layoutDots();buildTac();btns();renderStats();renderStadium();
@@ -130,7 +130,7 @@ function stMatchCleanup(){
   };
 })();
 
-const mode_notify=p=>p.mode!=='online';
+const mode_notify=p=>!p.online;
 function stMatchEnd(m,pk,forced){
   if(!m||!m.stx||m.stx.done)return;
   m.stx.done=true;if(m.timer)stopTimer();
@@ -167,7 +167,7 @@ function stApplyResult(p,res,gf,ga,x){
     const lv=ST_SB_LEVELS[p.meta.level],pts=res==='W'?lv.pts:res==='D'?Math.round(lv.pts*.3):0;
     c.sb.pts+=pts;c.sb.played++;
     if(res==='W'){c.coins+=lv.coins;lines.push(`+${stFmt(lv.coins)} moedas`)}
-    lines.push(`Squad Battles: +${pts} pontos semanais`);out.next='sb';
+    lines.push(`Squad Duels: +${pts} pontos semanais`);out.next='sb';
   }else if(mode==='champ'){
     const ch=c.ch,pts=res==='W'?4:res==='D'?2:1;ch.played++;if(res==='W')ch.wins++;ch.pts+=pts;ch.res.push(res);
     lines.push(`Champions: +${pts} pontos (${ch.played}/${ST_CH_GAMES} jogos, ${ch.wins} vitórias)`);
@@ -180,16 +180,12 @@ function stApplyResult(p,res,gf,ga,x){
   }else if(mode==='draft'){
     const d=c.draft;
     if(d){
-      if(res==='W'){d.wins++;lines.push(d.wins>=4?'🏆 Campeão do Draft!':`Avançou para a rodada ${d.wins+1}.`)}
+      if(res==='W'){d.wins++;if(p.online){d.onw=(d.onw||0)+1;lines.push('🌐 Vitória online: bônus no prêmio do Draft!')}lines.push(d.wins>=4?'🏆 Campeão do Draft!':`Avançou para a rodada ${d.wins+1}.`)}
       else{d.over=true;lines.push('Eliminado do Draft.')}
       if(d.wins>=4)d.over=true;
       d.stage=d.over?'done':'play';
     }
     out.next='draft';
-  }else if(mode==='online'){
-    const o=c.on,orat=(p.opp&&p.opp.rating)||1000,E=1/(1+Math.pow(10,(orat-o.rating)/400)),S=res==='W'?1:res==='D'?.5:0,d=Math.round(24*(S-E));
-    o.rating=Math.max(0,o.rating+d);o[res==='W'?'w':res==='D'?'d':'l']++;
-    lines.push(`Rating online ${d>=0?'+':''}${d} (agora ${Math.round(o.rating)})`);out.next='online';
   }else if(mode==='friend'){out.next='comm'}
   if(x.pk&&x.pk.winner)lines.unshift(`Pênaltis: ${x.pk.h} x ${x.pk.a}`);
   if(x.won)lines.unshift('O adversário abandonou a partida: vitória por 3 x 0.');
@@ -223,26 +219,25 @@ STV.play=()=>{
   const tiles=[
     ['rivals','🛡️','StarsRivals',`${ST_DIV_NAME(c.rv.div)} • ${c.rv.wins} vitórias na semana`,'Suba de divisão e ganhe recompensas semanais.'],
     ['champ','🏆','StarsChampions',champ?(c.ch.active?`${c.ch.played}/${ST_CH_GAMES} jogos • ${c.ch.pts} pts`:'Fim de semana aberto'):'Abre no fim de semana','Classifique-se e jogue 20 partidas. Vitória +4, derrota +1.'],
-    ['draft','🎲','StarsDraft',c.draft&&c.draft.stage!=='done'?'Em andamento':'Entrada: '+stFmt(ST_DRAFT_FEE)+' 🪙','Monte um time do zero e vá até a 4ª vitória no mata-mata.'],
-    ['sb','⚔️','Squad Battles',`${c.sb.pts} pts na semana`,'Enfrente a CPU em 6 níveis de dificuldade.'],
-    ['online','🌐','Online',`Rating ${Math.round((c.on||{}).rating||1000)}`,'Jogue ao vivo contra outro técnico.'],
-    ['friends','👥','Amistoso com amigos','Sem prêmios','Enfrente o elenco publicado de um amigo (CPU).']
+    ['draft','🎲','StarsDraft',c.draft&&c.draft.stage!=='done'?'Em andamento':'Entrada: '+stFmt(ST_DRAFT_FEE)+' 🪙','Monte um time do zero. Online ou offline (online rende mais).'],
+    ['sb','⚔️','Squad Duels',`${c.sb.pts} pts na semana`,'Só offline: enfrente a CPU em 6 níveis de dificuldade.'],
+    ['friends','👥','Amistoso com amigos','Sem prêmios','Ao vivo (online) ou contra o elenco publicado de um amigo.']
   ];
   if(!a.full)return `<div class="st-card"><h3 class="t">Complete o seu elenco</h3><p>Você precisa dos 11 titulares para jogar.</p><button class="btn" data-act="go" data-v="squad">Ir ao Elenco</button></div>`;
   return `<h2 class="t">Jogar</h2><div class="st-modes">${tiles.map(([k,ic,n,s,d],i)=>`<button class="st-mode tilt" style="--i:${i}" data-act="go" data-v="${k}"><span>${ic}</span><b>${n}</b><em>${esc(s)}</em><small>${esc(d)}</small>${k==='champ'&&pend?'<i class="st-pill">prêmio!</i>':''}</button>`).join('')}</div>
-  <p class="st-fine">Online: partida ao vivo contra outro técnico. No Amistoso, o time do amigo é controlado pela CPU com o elenco que ele publicou.</p>`;
+  <p class="st-fine">Rivals, Champions, Draft e Amistoso podem ser jogados 🌐 online, ao vivo contra outro técnico. O Squad Duels é só offline.</p>`;
 };
 
-/* ---------- Squad Battles ---------- */
+/* ---------- Squad Duels ---------- */
 STV.sb=()=>{
   const c=ST.club;
-  return `<div class="row" style="justify-content:space-between"><h2 class="t">Squad Battles</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div><p class="st-sub">Pontos semanais: <b>${c.sb.pts}</b> • ${c.sb.played} jogos</p>
+  return `<div class="row" style="justify-content:space-between"><h2 class="t">Squad Duels</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div><p class="st-sub">Pontos semanais: <b>${c.sb.pts}</b> • ${c.sb.played} jogos</p>
   <div class="st-sbl">${ST_SB_LEVELS.map(l=>`<div class="st-card st-lvl tilt"><h4>${l.n}</h4><b>OVR ${l.ovr}</b><small>Vitória: +${l.pts} pts • ${l.coins} 🪙</small><button class="btn" data-act="sbplay" data-i="${l.id}">Jogar</button></div>`).join('')}</div>
   <div class="st-card"><h3 class="t">Recompensas da semana</h3><div class="st-rw">${ST_SB_REWARDS.map(r=>{const ok=c.sb.pts>=r.p,cl=c.sb.claimed[r.p];return `<div class="st-rwi${cl?' done':''}"><b>${r.p} pts</b><small>${esc(stRewardText(r))}</small>${cl?'<em>✔</em>':`<button class="btn sm" data-act="sbclaim" data-p="${r.p}" ${ok?'':'disabled'}>Resgatar</button>`}</div>`}).join('')}</div></div>`;
 };
 STA.sbplay=el=>{
   if(!stReady())return;const lv=ST_SB_LEVELS[+el.dataset.i];
-  stStartMatch({mode:'sb',title:'Squad Battles • '+lv.n,home:stUserSpec(),away:stGenAi(lv.ovr,'sb'+lv.id),meta:{level:lv.id}});
+  stStartMatch({mode:'sb',title:'Squad Duels • '+lv.n,home:stUserSpec(),away:stGenAi(lv.ovr,'sb'+lv.id),meta:{level:lv.id}});
 };
 STA.sbclaim=el=>{const r=ST_SB_REWARDS.find(x=>x.p===+el.dataset.p),c=ST.club;if(!r||c.sb.pts<r.p||c.sb.claimed[r.p])return;c.sb.claimed[r.p]=1;stGrant(r);stSave();toast('🎁 '+stRewardText(r));stTopRefresh();stGo('sb',null,true)};
 
@@ -251,7 +246,7 @@ STV.rivals=()=>{
   const c=ST.club,r=c.rv,need=ST_DIV_PTS[r.div],mult=1+(10-r.div)*.15;
   return `<div class="row" style="justify-content:space-between"><h2 class="t">StarsRivals</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div>
   <div class="st-card st-rivhead"><div><small>Divisão</small><b>${ST_DIV_NAME(r.div)}</b></div><div><small>Rating</small><b>${Math.round(r.rating)}</b></div><div><small>Pontos p/ subir</small><b>${r.div>0?r.pts+'/'+need:'—'}</b></div><div><small>Vitórias na semana</small><b>${r.wins}</b></div><div><small>Sequência</small><b>${r.streak||0}</b></div></div>
-  <div class="st-card"><button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="rvplay">⚔️ Procurar partida</button><p class="st-fine">O sistema procura um técnico do beta com rating parecido. Se não houver ninguém, você enfrenta um rival da CPU da sua divisão. Vitória +3 pts, empate +1.</p>
+  <div class="st-card"><button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="rvplay">⚔️ Offline</button> <button class="btn sec" style="font-size:1.1rem;padding:.8rem 2rem" data-act="onopen" data-m="rivals">🌐 Online</button><p class="st-fine">Offline: o sistema procura um técnico do beta com rating parecido. Se não houver ninguém, você enfrenta um rival da CPU da sua divisão. Vitória +3 pts, empate +1.</p>
     ${r.wins>=ST_RIVALS_QUALIFY_WINS?'<p class="st-ok">✔ Com '+ST_RIVALS_QUALIFY_WINS+' vitórias, você está classificado para o Champions desta semana.</p>':`<p class="st-fine">Faltam ${ST_RIVALS_QUALIFY_WINS-r.wins} vitória(s) para se classificar ao Champions pelo Rivals.</p>`}</div>
   <div class="st-card"><h3 class="t">Recompensas semanais (×${mult.toFixed(2)} moedas pela divisão)</h3><div class="st-rw">${ST_RIVALS_REWARDS.map(x=>{const ok=r.wins>=x.w,cl=r.claimed[x.w];const rw={...x,coins:Math.round(x.coins*mult)};return `<div class="st-rwi${cl?' done':''}"><b>${x.w} vitórias</b><small>${esc(stRewardText(rw))}</small>${cl?'<em>✔</em>':`<button class="btn sm" data-act="rvclaim" data-w="${x.w}" ${ok?'':'disabled'}>Resgatar</button>`}</div>`}).join('')}</div></div>`;
 };
@@ -273,7 +268,7 @@ STV.champ=()=>{
   if(!open)main=`<div class="st-card"><h3 class="t">Fechado</h3><p>O StarsChampions abre no <b>sábado e domingo</b>. Até lá, se classifique pelo Rivals (${ST_RIVALS_QUALIFY_WINS} vitórias na semana, você tem ${c.rv.wins}).</p></div>`;
   else if(!qualified)main=`<div class="st-card"><h3 class="t">Classificação</h3><p>Você ainda não está classificado. Vença ${ST_RIVALS_QUALIFY_WINS} jogos no Rivals na semana (${c.rv.wins}/${ST_RIVALS_QUALIFY_WINS}) ou dispute o <b>playoff</b> de acesso contra um rival forte.</p><button class="btn" data-act="chpo" ${c.coins<2000?'disabled':''}>Disputar playoff (2.000 🪙)</button></div>`;
   else main=`<div class="st-card st-rivhead"><div><small>Jogos</small><b>${ch.played}/${ST_CH_GAMES}</b></div><div><small>Vitórias</small><b>${ch.wins}</b></div><div><small>Pontos</small><b>${ch.pts}</b></div><div><small>Prêmio atual</small><b style="font-size:.8rem">${esc(stRewardText(tier))}</b></div></div>
-    <div class="st-card">${done?`<p>Fase concluída! <button class="btn" data-act="chclaim" ${ch.claimed?'disabled':''}>${ch.claimed?'Prêmio resgatado':'Resgatar prêmio'}</button></p>`:`<button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="chplay">🏆 Jogar partida</button>`}<div class="st-resrow">${ch.res.map(r=>`<i class="${r}">${r}</i>`).join('')}</div></div>`;
+    <div class="st-card">${done?`<p>Fase concluída! <button class="btn" data-act="chclaim" ${ch.claimed?'disabled':''}>${ch.claimed?'Prêmio resgatado':'Resgatar prêmio'}</button></p>`:`<button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="chplay">🏆 Jogar offline</button> <button class="btn sec" style="font-size:1.1rem;padding:.8rem 2rem" data-act="onopen" data-m="champ">🌐 Jogar online</button>`}<div class="st-resrow">${ch.res.map(r=>`<i class="${r}">${r}</i>`).join('')}</div></div>`;
   return `<div class="row" style="justify-content:space-between"><h2 class="t">StarsChampions</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div>${pend?`<div class="st-card"><h3 class="t">Prêmios pendentes de semanas anteriores</h3><div class="st-rw">${pend}</div></div>`:''}${main}
   <div class="st-card"><h3 class="t">Faixas de prêmio</h3><div class="st-rw">${ST_CH_TIERS.map(t=>`<div class="st-rwi${ch.pts>=t.p&&ch.played?' done':''}"><b>${t.p}+ pts</b><small>${esc(stRewardText(t))}</small></div>`).join('')}</div></div>`;
 };
@@ -319,6 +314,7 @@ function stDraftEntry(){
   return `<div class="row" style="justify-content:space-between"><h2 class="t">StarsDraft</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div>
   <div class="st-card"><p>Pague a entrada de <b>${stFmt(ST_DRAFT_FEE)} 🪙</b>, monte um time escolhendo 1 entre 5 jogadores para cada posição e dispute um mata-mata de 4 jogos. Quanto mais vitórias, melhor o prêmio. Perdeu, acabou. Os jogadores do Draft não ficam com você.</p>
   <div class="st-rw">${ST_DRAFT_REWARDS.map((r,i)=>`<div class="st-rwi"><b>${i} vitória${i===1?'':'s'}</b><small>${esc(stRewardText(r))}</small></div>`).join('')}</div>
+  <p class="st-fine">🌐 Cada rodada pode ser jogada online (ao vivo contra outro técnico no Draft) ou offline. Cada vitória online soma +35% de moedas no prêmio e, com 2 ou mais, vem um pacote ouro extra.</p>
   <button class="btn" data-act="drstart" ${c.coins<ST_DRAFT_FEE?'disabled':''}>Entrar (${stFmt(ST_DRAFT_FEE)} 🪙)</button></div>`;
 }
 STA.drstart=()=>{
@@ -334,26 +330,32 @@ STA.drpick=el=>{
   else d.opts=stDraftOptions(FORMS[d.form][d.picked.length][0],d.picked.length);
   stSave();stGo('draft',null,true);
 };
+/* prêmio do Draft: cada vitória ONLINE soma +35% de moedas; com 2 ou mais vitórias online ganha também um pacote ouro */
+function stDraftReward(d){
+  const b=ST_DRAFT_REWARDS[Math.min(4,d.wins)],n=Math.min(d.onw||0,d.wins),rw={coins:Math.round((b.coins||0)*(1+.35*n)),packs:(b.packs||[]).slice()};
+  if(n>=2)rw.packs.push('ouro');
+  return rw;
+}
 function stDraftSpec(){
   const d=ST.club.draft,xi=d.picked,ch=stChem(xi,d.form,null);
   const best=xi.slice().sort((a,b)=>b.ovr-a.ovr)[0];
   return{user:currentUser,name:'Draft de '+ST.club.name,code:ST.club.code,crest:ST.club.crest,kits:ST.club.kits,ball:ST.club.ball,formation:d.form,atk:'eq',def:'eq',xi,bench:d.bench||Array(7).fill(null),captain:best.id,pk:best.id,mgr:null,stad:null,ovr:stTeamOvr(xi),chem:ch.total};
 }
 function stDraftPlay(){
-  const d=ST.club.draft,sp=stDraftSpec(),over=d.over,rw=ST_DRAFT_REWARDS[Math.min(4,d.wins)];
+  const d=ST.club.draft,sp=stDraftSpec(),over=d.over,rw=stDraftReward(d);
   return `<div class="row" style="justify-content:space-between"><h2 class="t">Draft • ${over?'fim':'rodada '+(d.wins+1)+'/4'}</h2></div>
   <div class="st-nums"><div><small>OVR</small><b>${sp.ovr}</b></div><div><small>ENT</small><b>${sp.chem}</b></div><div><small>VITÓRIAS</small><b>${d.wins}/4</b></div></div>
   ${stPitchHTML({formation:d.form,captain:'',pk:''},d.picked,null)}
-  <div class="st-card">${over?`<p>${d.wins>=4?'🏆 Campeão!':'Eliminado.'} Prêmio: <b>${esc(stRewardText(rw))}</b></p><button class="btn" data-act="drclaim">Resgatar prêmio</button>`:`<button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="drplay">▶ Jogar a rodada ${d.wins+1}</button>`}</div>`;
+  <div class="st-card">${over?`<p>${d.wins>=4?'🏆 Campeão!':'Eliminado.'} Prêmio: <b>${esc(stRewardText(rw))}</b></p><button class="btn" data-act="drclaim">Resgatar prêmio</button>`:`<button class="btn" style="font-size:1.1rem;padding:.8rem 2rem" data-act="drplay">▶ Jogar offline</button> <button class="btn sec" style="font-size:1.1rem;padding:.8rem 2rem" data-act="onopen" data-m="draft">🌐 Jogar online (prêmio maior)</button>`}</div>`;
 }
 STA.drplay=()=>{
   const d=ST.club.draft,sp=stDraftSpec();
   stStartMatch({mode:'draft',title:'StarsDraft • rodada '+(d.wins+1),home:sp,away:stGenAi(Math.max(60,sp.ovr-3+d.wins*2.5),'dr'+d.wins),etMode:'et_pen',meta:{round:d.wins}});
 };
-STA.drclaim=()=>{const c=ST.club,d=c.draft,rw=ST_DRAFT_REWARDS[Math.min(4,d.wins)];stGrant(rw);stLog('Draft: '+d.wins+' vitórias');c.draft=null;stSave();toast('🎁 '+stRewardText(rw));stTopRefresh();stGo('draft',null,true)};
+STA.drclaim=()=>{const c=ST.club,d=c.draft,rw=stDraftReward(d);stGrant(rw);stLog('Draft: '+d.wins+' vitórias');c.draft=null;stSave();toast('🎁 '+stRewardText(rw));stTopRefresh();stGo('draft',null,true)};
 
 /* ---------- Amistoso com amigos ---------- */
-STV.friends=()=>`<div class="row" style="justify-content:space-between"><h2 class="t">Amistoso com amigos</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div><p class="st-sub">Escolha um clube na Comunidade e toque em Desafiar.</p><div id="st-commbody" class="st-load"><div class="st-spin"></div></div>`;
+STV.friends=()=>`<div class="row" style="justify-content:space-between"><h2 class="t">Amistoso com amigos</h2><button class="btn sec sm" data-act="go" data-v="play">‹ Voltar</button></div><p class="st-sub">Escolha um clube na Comunidade e toque em Desafiar (contra o elenco publicado) ou em 🌐 Online (ao vivo).</p><div class="row" style="margin:.6rem 0"><button class="btn" data-act="onopen" data-m="friend">🌐 Salas online de amistoso</button></div><div id="st-commbody" class="st-load"><div class="st-spin"></div></div>`;
 STP.friends=STP.comm;
 STA.challenge=el=>{
   if(!stReady())return;const p=ST.pubs[stKey(el.dataset.u)];
